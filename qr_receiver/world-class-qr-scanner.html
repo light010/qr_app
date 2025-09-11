@@ -924,15 +924,21 @@
                             this.scanner = new BarcodeDetector({ formats: ['qr_code'] });
                             this.mode = 'native';
                             console.log('Using native BarcodeDetector API');
-                        } else {
-                            await this.initializeLibrary();
+                            return; // Successfully initialized with native API
                         }
                     } catch (e) {
                         console.log('BarcodeDetector check failed, falling back to library');
-                        await this.initializeLibrary();
                     }
-                } else {
-                    await this.initializeLibrary();
+                }
+                
+                // Fallback to library mode
+                await this.initializeLibrary();
+                
+                // Ensure we have a working scanner
+                if (this.mode === 'none') {
+                    const hasQrScanner = typeof QrScanner !== 'undefined';
+                    const hasBarcodeDetector = 'BarcodeDetector' in window;
+                    throw new Error(`QR scanner initialization failed. Available APIs: QrScanner=${hasQrScanner}, BarcodeDetector=${hasBarcodeDetector}`);
                 }
             }
             
@@ -942,6 +948,11 @@
                     QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner-worker.min.js';
                     this.mode = 'library';
                     console.log('Using qr-scanner library');
+                    return true;
+                } else {
+                    console.error('QrScanner library not loaded - check if script loaded correctly');
+                    this.mode = 'none';
+                    return false;
                 }
             }
             
@@ -1672,7 +1683,7 @@
                 loadingDetail.textContent = 'Loading QR scanner...';
                 await loadScript(
                     'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js',
-                    'Nimiq QR Scanner'
+                    'QR Scanner Library'
                 );
                 
                 loadingDetail.textContent = 'Loading crypto library...';
@@ -1681,9 +1692,9 @@
                     'Crypto-JS'
                 );
                 
-                // Verify libraries
+                // Verify libraries loaded successfully
                 if (typeof QrScanner === 'undefined') {
-                    throw new Error('QR Scanner failed to load');
+                    throw new Error('QR Scanner library failed to load from CDN');
                 }
                 
                 if (typeof CryptoJS === 'undefined') {
@@ -1724,7 +1735,12 @@
                 
                 if (loadError) {
                     loadError.style.display = 'block';
-                    loadError.textContent = error.message + '. Please check your connection and refresh.';
+                    // Show specific error without misleading network message
+                    if (error.message.includes('Failed to load')) {
+                        loadError.textContent = error.message + '. Please check your connection and refresh.';
+                    } else {
+                        loadError.textContent = error.message;
+                    }
                 }
                 
                 // Offer manual retry
