@@ -813,7 +813,7 @@
             
             async initializeLibrary() {
                 // Use Nimiq QR Scanner as fallback
-                QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+                QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner-worker.min.js';
                 this.scanner = new QrScanner(this.video, (result) => this.handleDetection(result), {
                     returnDetailedScanResult: true,
                     highlightScanRegion: false,
@@ -1335,7 +1335,7 @@
                 // Load dependencies with progress feedback
                 loadingDetail.textContent = 'Loading QR scanner library...';
                 await loadScript(
-                    'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js',
+                    'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js',
                     'Nimiq QR Scanner'
                 );
                 
