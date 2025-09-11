@@ -939,7 +939,7 @@
             async initializeLibrary() {
                 // Configure QR Scanner library
                 if (typeof QrScanner !== 'undefined') {
-                    QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+                    QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner-worker.min.js';
                     this.mode = 'library';
                     console.log('Using qr-scanner library');
                 }
@@ -1671,7 +1671,7 @@
                 // Load dependencies with progress feedback
                 loadingDetail.textContent = 'Loading QR scanner...';
                 await loadScript(
-                    'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js',
+                    'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js',
                     'Nimiq QR Scanner'
                 );
                 
