@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🍎 QR Receiver - Apple Design</title>
+    <style>
+        /* Apple-Inspired CSS Variables */
+        :root {
+            --primary-color: #007AFF;
+            --secondary-color: #5856D6;
+            --success-color: #30D158;
+            --warning-color: #FF9500;
+            --error-color: #FF453A;
+            --background-color: #000000;
+            --surface-color: #1C1C1E;
+            --text-color: #FFFFFF;
+            
+            --corner-radius: 12px;
+            --animation-duration: 300ms;
+            --animation-easing: cubic-bezier(0.25, 0.1, 0.25, 1);
+            
+            --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-family);
+            background: linear-gradient(135deg, var(--background-color), #111111);
+            color: var(--text-color);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: var(--spacing-md);
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            animation: fadeInUp var(--animation-duration) var(--animation-easing);
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            animation: fadeInDown var(--animation-duration) var(--animation-easing);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-sm);
+            text-shadow: 0 2px 10px rgba(0, 122, 255, 0.3);
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.8;
+            color: var(--text-color);
+        }
+        
+        /* Camera Section */
+        .camera-section {
+            background: var(--surface-color);
+            border-radius: var(--corner-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .camera-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, 
+                rgba(0, 122, 255, 0.05), 
+                rgba(88, 86, 214, 0.05));
+            pointer-events: none;
+        }
+        
+        .camera-container {
+            position: relative;
+            z-index: 1;
+        }
+        
+        #video-container {
+            position: relative;
+            width: 100%;
+            border-radius: var(--corner-radius);
+            overflow: hidden;
+            background: #000;
+            display: none;
+            margin: var(--spacing-md) 0;
+        }
+        
+        #video {
+            width: 100%;
+            display: block;
+            border-radius: var(--corner-radius);
+        }
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: var(--spacing-sm);
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: var(--spacing-md) 0;
+        }
+        
+        .btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--corner-radius);
+            padding: var(--spacing-sm) var(--spacing-lg);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--animation-duration) var(--animation-easing);
+            position: relative;
+            overflow: hidden;
+            min-width: 120px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+        }
+        
+        .btn-warning {
+            background: var(--warning-color);
+        }
+        
+        /* Progress Section */
+        .progress-section {
+            background: var(--surface-color);
+            border-radius: var(--corner-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+        }
+        
+        .progress-header {
+            text-align: center;
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .progress-header h3 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .progress-bar-container {
+            background: rgba(0, 122, 255, 0.1);
+            border-radius: calc(var(--corner-radius) / 2);
+            height: 8px;
+            overflow: hidden;
+            margin: var(--spacing-sm) 0;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, var(--success-color), var(--primary-color));
+            height: 100%;
+            width: 0%;
+            transition: width var(--animation-duration) var(--animation-easing);
+            border-radius: calc(var(--corner-radius) / 2);
+        }
+        
+        .progress-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-sm);
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: var(--spacing-sm);
+        }
+        
+        /* Status Panel */
+        .status-panel {
+            background: var(--surface-color);
+            border-radius: var(--corner-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .status-header {
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+            color: var(--primary-color);
+        }
+        
+        .log-entry {
+            padding: 4px 0;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.85rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideInRight var(--animation-duration) var(--animation-easing);
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .log-entry.success { color: var(--success-color); }
+        .log-entry.error { color: var(--error-color); }
+        .log-entry.warning { color: var(--warning-color); }
+        .log-entry.info { color: var(--primary-color); }
+        .log-entry.integrity { color: #FF6B35; font-weight: 600; }
+        
+        /* File Info Panel */
+        .file-info {
+            background: var(--surface-color);
+            border-radius: var(--corner-radius);
+            padding: var(--spacing-lg);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+        }
+        
+        .file-info h3 {
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-md);
+            font-weight: 600;
+        }
+        
+        .info-grid {
+            display: grid;
+            gap: var(--spacing-sm);
+            font-size: 0.9rem;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 500;
+            opacity: 0.8;
+        }
+        
+        .info-value {
+            font-family: 'SF Mono', Monaco, monospace;
+            color: var(--success-color);
+            font-weight: 600;
+        }
+        
+        .hash-display {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.75rem;
+            word-break: break-all;
+            color: #8E8E93;
+            background: rgba(0, 0, 0, 0.3);
+            padding: var(--spacing-sm);
+            border-radius: 6px;
+            margin-top: var(--spacing-sm);
+        }
+        
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            .container {
+                padding: var(--spacing-sm);
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: light) {
+            :root {
+                --background-color: #FFFFFF;
+                --surface-color: #F2F2F7;
+                --text-color: #000000;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🍎 QR Receiver</h1>
+            <p>Apple-inspired design for secure file reception</p>
+        </header>
+        
+        <section class="camera-section">
+            <div class="camera-container">
+                <div class="controls">
+                    <button id="start-btn" class="btn">📷 Start Scanner</button>
+                    <button id="stop-btn" class="btn btn-warning" disabled>⏹ Stop</button>
+                    <button id="clear-btn" class="btn btn-success">🗑 Clear</button>
+                </div>
+                
+                <div id="video-container">
+                    <video id="video" playsinline muted></video>
+                </div>
+            </div>
+        </section>
+        
+        <section class="progress-section">
+            <div class="progress-header">
+                <h3>📊 Transfer Progress</h3>
+            </div>
+            
+            <div class="progress-bar-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            
+            <div class="progress-stats">
+                <div>Chunks: <span id="chunks-received">0</span> / <span id="total-chunks">0</span></div>
+                <div>Progress: <span id="progress-percent">0%</span></div>
+            </div>
+        </section>
+        
+        <section class="status-panel">
+            <div class="status-header">📱 Scanner Status</div>
+            <div id="status-log">
+                <div class="log-entry info">🚀 QR Receiver ready - Apple-inspired design</div>
+                <div class="log-entry info">📱 Optimized for iPad Safari with Nimiq scanner</div>
+            </div>
+        </section>
+        
+        <section class="file-info">
+            <h3>🔒 File Information & Integrity</h3>
+            <div class="info-grid">
+                <div class="info-row">
+                    <span class="info-label">Filename:</span>
+                    <span id="filename" class="info-value">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Chunk Verification:</span>
+                    <span id="chunk-integrity" class="info-value">PENDING</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Overall Integrity:</span>
+                    <span id="overall-integrity" class="info-value">PENDING</span>
+                </div>
+            </div>
+            
+            <div class="hash-display">
+                <div>Expected SHA-256: <span id="expected-hash">-</span></div>
+                <div>Calculated SHA-256: <span id="calculated-hash">-</span></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Nimiq QR Scanner (iPad-optimized) -->
+    <script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+    
+    <!-- Crypto-JS for SHA-256 calculation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <script>
+        class AppleQRReceiver {
+            constructor() {
+                this.scanner = null;
+                this.chunks = new Map();
+                this.totalChunks = 0;
+                this.filename = '';
+                this.expectedHash = '';
+                this.chunkHashes = new Map();
+                
+                this.setupUI();
+                this.setupScanner();
+            }
+            
+            setupUI() {
+                document.getElementById('start-btn').onclick = () => this.startScanning();
+                document.getElementById('stop-btn').onclick = () => this.stopScanning();  
+                document.getElementById('clear-btn').onclick = () => this.clearData();
+                
+                // Add haptic feedback for iOS
+                if (navigator.vibrate) {
+                    document.querySelectorAll('.btn').forEach(btn => {
+                        btn.addEventListener('click', () => navigator.vibrate(50));
+                    });
+                }
+            }
+            
+            async setupScanner() {
+                try {
+                    // Set worker path for iPad compatibility
+                    QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+                    
+                    this.log('🔍 Nimiq QR Scanner initialized', 'info');
+                    this.log('🛡️ SHA-256 integrity checking enabled', 'integrity');
+                    this.log('🍎 Apple-inspired interface ready', 'info');
+                } catch (error) {
+                    this.log('❌ Scanner setup failed: ' + error.message, 'error');
+                }
+            }
+            
+            async startScanning() {
+                try {
+                    const video = document.getElementById('video');
+                    const container = document.getElementById('video-container');
+                    
+                    this.scanner = new QrScanner(video, (result) => this.handleQRData(result), {
+                        returnDetailedScanResult: true,
+                        highlightScanRegion: true,
+                        highlightCodeOutline: true,
+                        maxScansPerSecond: 5,
+                        preferredCamera: 'environment'  // Use back camera
+                    });
+                    
+                    await this.scanner.start();
+                    
+                    container.style.display = 'block';
+                    document.getElementById('start-btn').disabled = true;
+                    document.getElementById('stop-btn').disabled = false;
+                    
+                    this.log('📷 Camera started - Ready for QR codes', 'success');
+                    this.log('🔍 Scanning for file transfer...', 'info');
+                    
+                    // Add visual feedback
+                    this.animateElement(container, 'fadeInUp');
+                    
+                } catch (error) {
+                    this.log('❌ Camera access failed: ' + error.message, 'error');
+                    this.log('💡 Please allow camera permissions', 'warning');
+                }
+            }
+            
+            stopScanning() {
+                if (this.scanner) {
+                    this.scanner.stop();
+                    this.scanner = null;
+                }
+                
+                document.getElementById('video-container').style.display = 'none';
+                document.getElementById('start-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = true;
+                
+                this.log('📷 Camera stopped', 'info');
+            }
+            
+            handleQRData(result) {
+                const data = result.data;
+                
+                try {
+                    // Try JSON format first (qrfile/v2, qrfile/v1)
+                    if (data.startsWith('{')) {
+                        const parsed = JSON.parse(data);
+                        if (parsed.fmt === 'qrfile/v2' || parsed.fmt === 'qrfile/v1') {
+                            this.processJSONFormat(parsed);
+                            return;
+                        }
+                    }
+                    
+                    // Try simple format: F:filename:I:index:T:total:D:data
+                    if (data.startsWith('F:')) {
+                        this.processSimpleFormat(data);
+                        return;
+                    }
+                    
+                    this.log('❓ Unknown QR format detected', 'warning');
+                    
+                } catch (error) {
+                    this.log('❌ QR processing error: ' + error.message, 'error');
+                }
+            }
+            
+            processSimpleFormat(data) {
+                // Parse: F:filename:I:index:T:total:D:data
+                const parts = data.split(':');
+                if (parts.length < 7) {
+                    this.log('❌ Invalid simple format', 'error');
+                    return;
+                }
+                
+                const filename = parts[1];
+                const index = parseInt(parts[3]);
+                const total = parseInt(parts[5]);
+                const chunkData = parts.slice(7).join(':'); // Rejoin in case data contains colons
+                
+                if (filename) this.filename = filename;
+                this.processChunk(index, total, chunkData, null, 'simple');
+            }
+            
+            processJSONFormat(data) {
+                const index = data.index;
+                const total = data.total;
+                const chunkData = data.data_b64;
+                const chunkHash = data.chunk_sha256;
+                const overallHash = data.file_sha256 || data.overall_sha256;
+                
+                // Store metadata
+                if (data.name) this.filename = data.name;
+                if (overallHash) this.expectedHash = overallHash;
+                
+                this.processChunk(index, total, chunkData, chunkHash, data.fmt);
+            }
+            
+            processChunk(index, total, base64Data, expectedChunkHash, format) {
+                // Check for duplicate
+                if (this.chunks.has(index)) {
+                    return;
+                }
+                
+                try {
+                    // Decode base64 data
+                    const binaryData = this.base64ToBytes(base64Data);
+                    
+                    // Verify chunk integrity if hash provided
+                    if (expectedChunkHash) {
+                        const actualHash = this.calculateSHA256(binaryData);
+                        const shortExpected = expectedChunkHash.substring(0, 16);
+                        const shortActual = actualHash.substring(0, 16);
+                        
+                        if (shortActual !== shortExpected) {
+                            this.log(`❌ Chunk ${index} integrity FAILED`, 'error');
+                            return;
+                        }
+                        
+                        this.chunkHashes.set(index, actualHash);
+                        this.log(`✅ Chunk ${index} integrity verified`, 'integrity');
+                    }
+                    
+                    // Store chunk
+                    this.chunks.set(index, binaryData);
+                    this.totalChunks = total;
+                    
+                    this.updateProgress();
+                    this.log(`📦 Chunk ${index}/${total} received (${format})`, 'success');
+                    
+                    // Add haptic feedback for chunk received
+                    if (navigator.vibrate) {
+                        navigator.vibrate(25);
+                    }
+                    
+                    // Check if transfer complete
+                    if (this.chunks.size === total) {
+                        this.completeTransfer();
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Chunk ${index} processing failed: ${error.message}`, 'error');
+                }
+            }
+            
+            completeTransfer() {
+                this.log('🎉 All chunks received - Reconstructing file...', 'success');
+                
+                // Reconstruct data in correct order
+                const reconstructed = new Uint8Array(
+                    Array.from(this.chunks.keys())
+                        .sort((a, b) => a - b)
+                        .map(key => Array.from(this.chunks.get(key)))
+                        .flat()
+                );
+                
+                // Verify overall integrity
+                const actualHash = this.calculateSHA256(reconstructed);
+                const integrityMatch = this.verifyOverallIntegrity(actualHash);
+                
+                // Update UI
+                this.updateFileInfo(actualHash, integrityMatch);
+                
+                if (integrityMatch) {
+                    this.log('🔒 INTEGRITY VERIFICATION PASSED!', 'success');
+                    this.downloadFile(reconstructed);
+                    
+                    // Success haptic feedback
+                    if (navigator.vibrate) {
+                        navigator.vibrate([100, 50, 100]);
+                    }
+                } else {
+                    this.log('❌ INTEGRITY VERIFICATION FAILED!', 'error');
+                    
+                    // Error haptic feedback
+                    if (navigator.vibrate) {
+                        navigator.vibrate([200, 100, 200, 100, 200]);
+                    }
+                }
+            }
+            
+            verifyOverallIntegrity(actualHash) {
+                if (!this.expectedHash) return true; // No hash to verify
+                
+                const expectedLength = this.expectedHash.length;
+                const actualShort = actualHash.substring(0, expectedLength);
+                return actualShort.toLowerCase() === this.expectedHash.toLowerCase();
+            }
+            
+            updateFileInfo(actualHash, integrityMatch) {
+                document.getElementById('filename').textContent = this.filename || 'qr_transfer.tar.gz';
+                document.getElementById('chunk-integrity').textContent = 
+                    this.chunkHashes.size > 0 ? 'VERIFIED ✅' : 'SKIPPED';
+                document.getElementById('overall-integrity').textContent = 
+                    integrityMatch ? 'VERIFIED ✅' : 'FAILED ❌';
+                document.getElementById('expected-hash').textContent = 
+                    this.expectedHash || 'N/A';
+                document.getElementById('calculated-hash').textContent = 
+                    actualHash.substring(0, 32) + '...';
+            }
+            
+            calculateSHA256(data) {
+                const wordArray = CryptoJS.lib.WordArray.create(data);
+                return CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+            }
+            
+            base64ToBytes(base64) {
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes;
+            }
+            
+            downloadFile(data) {
+                try {
+                    const blob = new Blob([data], { type: 'application/gzip' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = this.filename || 'qr_transfer.tar.gz';
+                    
+                    // For iOS, we need to trigger download differently
+                    if (navigator.userAgent.match(/iPhone|iPad|iPod/)) {
+                        // iOS Safari handling
+                        a.target = '_blank';
+                    }
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    this.log(`📥 Download started: ${a.download}`, 'success');
+                    this.log(`📊 File size: ${this.formatBytes(data.length)}`, 'info');
+                    
+                } catch (error) {
+                    this.log('❌ Download failed: ' + error.message, 'error');
+                }
+            }
+            
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            updateProgress() {
+                if (this.totalChunks === 0) return;
+                
+                const percentage = (this.chunks.size / this.totalChunks) * 100;
+                document.getElementById('progress-bar').style.width = percentage + '%';
+                document.getElementById('chunks-received').textContent = this.chunks.size;
+                document.getElementById('total-chunks').textContent = this.totalChunks;
+                document.getElementById('progress-percent').textContent = Math.round(percentage) + '%';
+            }
+            
+            clearData() {
+                this.chunks.clear();
+                this.chunkHashes.clear();
+                this.totalChunks = 0;
+                this.filename = '';
+                this.expectedHash = '';
+                
+                // Reset UI
+                document.getElementById('progress-bar').style.width = '0%';
+                document.getElementById('chunks-received').textContent = '0';
+                document.getElementById('total-chunks').textContent = '0';
+                document.getElementById('progress-percent').textContent = '0%';
+                document.getElementById('filename').textContent = '-';
+                document.getElementById('expected-hash').textContent = '-';
+                document.getElementById('calculated-hash').textContent = '-';
+                document.getElementById('chunk-integrity').textContent = 'PENDING';
+                document.getElementById('overall-integrity').textContent = 'PENDING';
+                
+                // Clear log
+                const statusLog = document.getElementById('status-log');
+                statusLog.innerHTML = '<div class="log-entry info">🗑 Data cleared - Ready for new transfer</div>';
+                
+                this.log('🗑 Transfer data cleared', 'info');
+            }
+            
+            log(message, type = 'info') {
+                const statusLog = document.getElementById('status-log');
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${type}`;
+                logEntry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+                
+                statusLog.appendChild(logEntry);
+                statusLog.scrollTop = statusLog.scrollHeight;
+                
+                // Keep only last 20 messages
+                while (statusLog.children.length > 20) {
+                    statusLog.removeChild(statusLog.firstChild);
+                }
+                
+                console.log(`[${type.toUpperCase()}] ${message}`);
+            }
+            
+            animateElement(element, animationClass) {
+                element.style.animation = `${animationClass} var(--animation-duration) var(--animation-easing)`;
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add iOS-specific optimizations
+            if (navigator.userAgent.match(/iPhone|iPad|iPod/)) {
+                document.body.style.webkitTouchCallout = 'none';
+                document.body.style.webkitUserSelect = 'none';
+            }
+            
+            window.receiver = new AppleQRReceiver();
+        });
+    </script>
+</body>
+</html>
