@@ -141,8 +141,10 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 250px;
-            height: 250px;
+            width: 80vw;
+            height: 80vw;
+            max-width: 400px;
+            max-height: 400px;
             border: 3px solid var(--scan-frame-color);
             border-radius: 24px;
             background: transparent;
@@ -385,8 +387,18 @@
         /* Orientation Support */
         @media screen and (orientation: landscape) {
             .scan-frame {
-                width: 200px;
-                height: 200px;
+                width: 60vh;
+                height: 60vh;
+                max-width: 400px;
+                max-height: 400px;
+            }
+        }
+        
+        /* Tablet and larger screens */
+        @media screen and (min-width: 768px) {
+            .scan-frame {
+                width: 350px;
+                height: 350px;
             }
         }
         
@@ -510,7 +522,12 @@
                 
                 this.setupUI();
                 this.setupScanner();
-                this.startScanning(); // Auto-start for iOS-style UX
+                
+                // Only auto-start if secure context
+                if (window.isSecureContext) {
+                    // Delay auto-start to ensure DOM is ready
+                    setTimeout(() => this.startScanning(), 500);
+                }
             }
             
             setupUI() {
@@ -527,6 +544,12 @@
                 
                 // Touch gestures
                 this.setupGestures();
+                
+                // Don't auto-start if not secure context
+                if (!window.isSecureContext) {
+                    this.updateStatus('HTTPS Required', 'Camera needs secure connection (HTTPS/localhost)');
+                    return;
+                }
             }
             
             setupHapticFeedback() {
@@ -575,6 +598,48 @@
                 try {
                     const video = document.getElementById('video');
                     
+                    // Check if we're on HTTPS or localhost
+                    const isSecureContext = window.isSecureContext;
+                    if (!isSecureContext) {
+                        this.showError('HTTPS required for camera');
+                        this.updateStatus('Security Error', 'Use HTTPS or localhost for camera access');
+                        console.error('Camera requires HTTPS. Current protocol:', window.location.protocol);
+                        return;
+                    }
+                    
+                    // First check if we can access media devices
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        this.showError('Camera not supported');
+                        this.updateStatus('Camera Error', 'Your browser does not support camera access');
+                        return;
+                    }
+                    
+                    // Request camera permission explicitly first
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ 
+                            video: { 
+                                facingMode: 'environment',
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            } 
+                        });
+                        // Stop the test stream
+                        stream.getTracks().forEach(track => track.stop());
+                    } catch (permissionError) {
+                        if (permissionError.name === 'NotAllowedError') {
+                            this.showError('Camera permission denied');
+                            this.updateStatus('Permission Required', 'Please allow camera access and reload');
+                        } else if (permissionError.name === 'NotFoundError') {
+                            this.showError('No camera found');
+                            this.updateStatus('No Camera', 'No camera detected on this device');
+                        } else {
+                            this.showError('Camera error');
+                            this.updateStatus('Camera Error', permissionError.message);
+                        }
+                        console.error('Camera permission error:', permissionError);
+                        return;
+                    }
+                    
                     this.scanner = new QrScanner(video, (result) => this.handleQRData(result), {
                         returnDetailedScanResult: true,
                         highlightScanRegion: false, // We have custom overlay
@@ -590,8 +655,9 @@
                     this.updateStatus('Scanning...', 'Point camera at QR code');
                     
                 } catch (error) {
-                    this.showError('Camera access denied');
-                    console.error('Camera error:', error);
+                    this.showError('Scanner failed to start');
+                    this.updateStatus('Scanner Error', error.message || 'Unknown error');
+                    console.error('Scanner error:', error);
                 }
             }
             
