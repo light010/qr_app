@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>QR Scanner - Offline</title>
+    <style>
+        :root {
+            --primary-blue: #007AFF;
+            --error-red: #FF453A;
+            --white: #FFFFFF;
+            --black: #000000;
+            --gray-light: rgba(255, 255, 255, 0.15);
+            --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-system);
+            background: linear-gradient(135deg, var(--black), #111111);
+            color: var(--white);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .offline-icon {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 32px;
+            opacity: 0.7;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+        }
+        
+        .offline-title {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--white);
+        }
+        
+        .offline-message {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.5;
+            max-width: 400px;
+            margin-bottom: 32px;
+        }
+        
+        .offline-features {
+            background: var(--gray-light);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            margin-bottom: 32px;
+            text-align: left;
+        }
+        
+        .offline-features h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .offline-features ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .offline-features li {
+            padding: 8px 0;
+            color: rgba(255, 255, 255, 0.9);
+            position: relative;
+            padding-left: 24px;
+        }
+        
+        .offline-features li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--primary-blue);
+            font-weight: bold;
+        }
+        
+        .retry-btn {
+            background: var(--primary-blue);
+            color: var(--white);
+            border: none;
+            border-radius: 12px;
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 16px;
+        }
+        
+        .retry-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+        
+        .retry-btn:active {
+            transform: translateY(0);
+        }
+        
+        .cache-btn {
+            background: var(--gray-light);
+            color: var(--white);
+            border: none;
+            border-radius: 12px;
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .cache-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .status {
+            margin-top: 24px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+        
+        @media (max-width: 480px) {
+            .offline-title {
+                font-size: 24px;
+            }
+            
+            .offline-features {
+                max-width: 100%;
+            }
+            
+            .retry-btn, .cache-btn {
+                display: block;
+                width: 100%;
+                margin: 8px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Offline Icon -->
+    <svg class="offline-icon pulse" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="60" cy="60" r="60" fill="url(#gradient)" opacity="0.8"/>
+        <path d="M40 40h40v40H40V40zm8 8v24h24V48H48z" fill="white"/>
+        <path d="M52 52h4v4h-4zm8 0h4v4h-4zm8 0h4v4h-4z" fill="#007AFF"/>
+        <path d="M52 60h4v4h-4zm16 0h4v4h-4z" fill="#007AFF"/>
+        <path d="M52 68h4v4h-4zm8 0h4v4h-4zm8 0h4v4h-4z" fill="#007AFF"/>
+        <defs>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#007AFF;stop-opacity:0.8"/>
+                <stop offset="100%" style="stop-color:#5856D6;stop-opacity:0.6"/>
+            </linearGradient>
+        </defs>
+    </svg>
+    
+    <h1 class="offline-title">You're Offline</h1>
+    
+    <p class="offline-message">
+        No internet connection detected. Don't worry - many QR scanner features work offline!
+    </p>
+    
+    <div class="offline-features">
+        <h3>Available Offline</h3>
+        <ul>
+            <li>QR code scanning with camera</li>
+            <li>File reconstruction from cached chunks</li>
+            <li>Previously downloaded files access</li>
+            <li>Basic scanner functionality</li>
+        </ul>
+    </div>
+    
+    <div>
+        <button class="retry-btn" onclick="retryConnection()">
+            Try Again
+        </button>
+        <button class="cache-btn" onclick="openCachedVersion()">
+            Open Cached Scanner
+        </button>
+    </div>
+    
+    <div class="status" id="status">
+        Tap "Try Again" when you're back online
+    </div>
+
+    <script>
+        // Check connection status
+        function updateConnectionStatus() {
+            const status = document.getElementById('status');
+            
+            if (navigator.onLine) {
+                status.textContent = 'Connection restored! Tap "Try Again" to reload.';
+                status.style.color = '#30D158';
+            } else {
+                status.textContent = 'Still offline. Connect to internet and try again.';
+                status.style.color = 'rgba(255, 255, 255, 0.6)';
+            }
+        }
+        
+        // Retry connection
+        async function retryConnection() {
+            const status = document.getElementById('status');
+            status.textContent = 'Checking connection...';
+            status.style.color = '#FF9500';
+            
+            try {
+                // Try to fetch a small resource to test connectivity
+                const response = await fetch('/', { cache: 'no-store' });
+                
+                if (response.ok) {
+                    status.textContent = 'Connection restored! Redirecting...';
+                    status.style.color = '#30D158';
+                    
+                    // Redirect to main app
+                    setTimeout(() => {
+                        window.location.href = './qr-scanner.html';
+                    }, 1000);
+                } else {
+                    throw new Error('Network response not ok');
+                }
+            } catch (error) {
+                status.textContent = 'Still no connection. Please check your internet.';
+                status.style.color = '#FF453A';
+            }
+        }
+        
+        // Open cached version
+        function openCachedVersion() {
+            // Try to open the cached main app
+            window.location.href = './qr-scanner.html?offline=true';
+        }
+        
+        // Listen for connection changes
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+        
+        // Auto-retry when connection is restored
+        window.addEventListener('online', () => {
+            setTimeout(retryConnection, 1000);
+        });
+        
+        // Initial status check
+        updateConnectionStatus();
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                retryConnection();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                openCachedVersion();
+            }
+        });
+        
+        // Auto-check connection every 30 seconds
+        setInterval(updateConnectionStatus, 30000);
+    </script>
+</body>
+</html>

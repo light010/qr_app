@@ -1,0 +1,487 @@
+/* World-Class QR Scanner - iOS-Style Production Styles */
+
+:root {
+    --primary-blue: #007AFF;
+    --success-green: #30D158;
+    --warning-orange: #FF9500;
+    --error-red: #FF453A;
+    --white: #FFFFFF;
+    --black: #000000;
+    --gray-light: rgba(255, 255, 255, 0.15);
+    --gray-medium: rgba(255, 255, 255, 0.3);
+    --gray-dark: rgba(0, 0, 0, 0.5);
+    
+    --blur-background: rgba(0, 0, 0, 0.3);
+    --scan-frame-color: #FFD60A;
+    
+    --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: 'SF Mono', Consolas, 'Courier New', monospace;
+    
+    --transition-fast: 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+    --transition-smooth: 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    
+    --safe-area-top: env(safe-area-inset-top, 20px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-system);
+    background: var(--black);
+    color: var(--white);
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+}
+
+/* Loading Screen */
+.loading-screen {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, var(--black), #111111);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.5s ease;
+}
+
+.loading-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid var(--gray-light);
+    border-top-color: var(--primary-blue);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 24px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--white);
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.loading-detail {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+}
+
+.load-error {
+    color: var(--error-red);
+    margin-top: 16px;
+    font-size: 14px;
+    max-width: 300px;
+    text-align: center;
+    display: none;
+}
+
+/* Fullscreen Camera Container */
+.camera-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--black);
+}
+
+#video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* Performance Monitor */
+.performance-monitor {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--success-green);
+    z-index: 200;
+    display: none;
+}
+
+.performance-monitor.visible {
+    display: block;
+}
+
+/* iOS-Style Status Bar */
+.status-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--safe-area-top);
+    background: linear-gradient(180deg, var(--gray-dark) 0%, transparent 100%);
+    z-index: 100;
+    pointer-events: none;
+}
+
+/* Top Control Bar */
+.top-bar {
+    position: fixed;
+    top: var(--safe-area-top);
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(180deg, var(--blur-background) 0%, transparent 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
+
+.top-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--white);
+    text-align: center;
+    flex: 1;
+    letter-spacing: -0.3px;
+}
+
+.top-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    background: var(--gray-light);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: none;
+    color: var(--white);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.top-btn:active {
+    transform: scale(0.95);
+    background: var(--gray-medium);
+}
+
+/* Scanning Frame - iOS Style with 80% scan region */
+.scan-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 80;
+    pointer-events: none;
+}
+
+.scan-frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80vw;
+    height: 80vw;
+    max-width: 400px;
+    max-height: 400px;
+    border: 3px solid var(--scan-frame-color);
+    border-radius: 24px;
+    background: transparent;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+
+.scan-frame::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    right: -3px;
+    bottom: -3px;
+    border-radius: 24px;
+    background: linear-gradient(45deg, var(--scan-frame-color), rgba(255, 214, 10, 0.6));
+    animation: scan-pulse 2s ease-in-out infinite;
+    z-index: -1;
+}
+
+@keyframes scan-pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+}
+
+/* Bottom Control Panel */
+.bottom-panel {
+    position: fixed;
+    bottom: var(--safe-area-bottom);
+    left: 0;
+    right: 0;
+    background: linear-gradient(0deg, var(--blur-background) 0%, transparent 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 90;
+    padding: 20px;
+    transform: translateY(0);
+    transition: transform var(--transition-smooth);
+}
+
+/* Transfer Status */
+.transfer-status {
+    background: var(--gray-light);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 16px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    text-align: center;
+    transition: all var(--transition-smooth);
+}
+
+.progress-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--white);
+    margin-bottom: 4px;
+}
+
+.progress-detail {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: var(--font-mono);
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.action-btn {
+    height: 56px;
+    padding: 0 24px;
+    border-radius: 28px;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    -webkit-tap-highlight-color: transparent;
+    min-width: 120px;
+    justify-content: center;
+}
+
+.action-btn.primary {
+    background: var(--primary-blue);
+    color: var(--white);
+}
+
+.action-btn.secondary {
+    background: var(--gray-light);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: var(--white);
+}
+
+.action-btn.success {
+    background: var(--success-green);
+    color: var(--white);
+}
+
+.action-btn:active {
+    transform: scale(0.95);
+}
+
+/* Chunk Grid */
+.chunk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8px, 1fr));
+    gap: 2px;
+    max-width: 300px;
+    margin: 12px auto 0;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+}
+
+.chunk-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+}
+
+.chunk-indicator.pending {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.chunk-indicator.received {
+    background: var(--success-green);
+    animation: chunk-received 0.3s ease;
+}
+
+.chunk-indicator.error {
+    background: var(--error-red);
+    animation: chunk-error 0.5s ease;
+}
+
+.chunk-indicator.retrying {
+    background: var(--warning-orange);
+    animation: chunk-retry 1s ease-in-out infinite;
+}
+
+.chunk-indicator.failed {
+    background: #8B0000;
+    opacity: 0.6;
+    animation: chunk-failed 0.5s ease;
+}
+
+@keyframes chunk-received {
+    0% { transform: scale(1); background: var(--warning-orange); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); background: var(--success-green); }
+}
+
+@keyframes chunk-error {
+    0%, 100% { transform: scale(1); }
+    25%, 75% { transform: scale(1.2); }
+}
+
+@keyframes chunk-retry {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes chunk-failed {
+    0% { transform: scale(1); }
+    25% { transform: scale(0.8); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* Responsive Design */
+@media screen and (max-width: 480px) {
+    .action-buttons {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .action-btn {
+        width: 100%;
+        min-width: unset;
+    }
+    
+    .scan-frame {
+        width: 85vw;
+        height: 85vw;
+    }
+}
+
+@media screen and (min-width: 768px) {
+    .scan-frame {
+        width: 350px;
+        height: 350px;
+    }
+    
+    .bottom-panel {
+        max-width: 600px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+}
+
+/* Theme-aware components */
+.camera-view {
+    transition: background var(--theme-transition, 0.3s ease);
+}
+
+/* Light theme overrides */
+body.theme-light {
+    --primary-blue: #0051D5;
+    --success-green: #28A745;
+    --warning-orange: #F77F00;
+    --error-red: #DC3545;
+    --scan-frame-color: #0051D5;
+}
+
+body.theme-light .loading-screen {
+    background: linear-gradient(135deg, #FFFFFF, #F5F5F5);
+}
+
+body.theme-light .loading-spinner {
+    border-color: #E0E0E0;
+}
+
+body.theme-light .top-btn,
+body.theme-light .action-btn.secondary {
+    background: rgba(0, 0, 0, 0.08);
+    color: #000000;
+}
+
+body.theme-light .top-btn:active,
+body.theme-light .action-btn.secondary:active {
+    background: rgba(0, 0, 0, 0.12);
+}
+
+body.theme-light .transfer-status {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+body.theme-light .chunk-grid {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+body.theme-light .performance-monitor {
+    background: rgba(255, 255, 255, 0.9);
+    color: #000000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .scan-frame::before {
+        animation: none;
+    }
+}

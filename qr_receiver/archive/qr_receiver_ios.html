@@ -502,10 +502,10 @@
     </div>
 
     <!-- Nimiq QR Scanner (iPad-optimized) -->
-    <script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js" onload="console.log('Nimiq QR Scanner loaded')" onerror="console.error('Failed to load Nimiq QR Scanner')"></script>
     
     <!-- Crypto-JS for SHA-256 calculation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" onload="console.log('Crypto-JS loaded')" onerror="console.error('Failed to load Crypto-JS')"></script>
     
     <script>
         class iOSQRReceiver {
@@ -1000,7 +1000,17 @@
         }
         
         // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', () => {
+        function initializeApp() {
+            // Check if QrScanner is loaded
+            if (typeof QrScanner === 'undefined') {
+                console.error('QrScanner library not loaded! Retrying...');
+                // Retry after a short delay
+                setTimeout(initializeApp, 500);
+                return;
+            }
+            
+            console.log('QrScanner library loaded successfully');
+            
             // iOS-specific optimizations
             if (navigator.userAgent.match(/iPhone|iPad|iPod/)) {
                 // Prevent zoom and selection
@@ -1020,8 +1030,22 @@
             }
             
             // Initialize receiver
-            window.receiver = new iOSQRReceiver();
-        });
+            try {
+                window.receiver = new iOSQRReceiver();
+            } catch (error) {
+                console.error('Failed to initialize QR receiver:', error);
+                document.getElementById('progress-text').textContent = 'Initialization Error';
+                document.getElementById('progress-detail').textContent = error.message;
+            }
+        }
+        
+        // Wait for both DOM and external scripts
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            // DOM already loaded, but wait for scripts
+            setTimeout(initializeApp, 100);
+        }
     </script>
 </body>
 </html>
