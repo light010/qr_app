@@ -158,39 +158,59 @@ class IntegrityQRReceiver {
   
   async setupScanner() {
     try {
+      // Wait for QrScanner to be available
+      if (typeof QrScanner === 'undefined') {
+        this.log('⏳ Waiting for QR Scanner library...', 'info');
+        await new Promise((resolve) => {
+          const checkInterval = setInterval(() => {
+            if (typeof QrScanner !== 'undefined') {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 100);
+        });
+      }
+
       // Set path for worker (iPad compatibility)
       QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
-      
+
       this.log('📡 Nimiq QR Scanner initialized', 'info');
       this.log('🔒 SHA-256 integrity checking enabled', 'integrity');
     } catch (error) {
       this.log('❌ Scanner setup failed: ' + error.message, 'error');
     }
   }
-  
+
   async startScanning() {
+    // Prevent multiple scanner instances
+    if (this.scanner) {
+      this.log('⚠️ Scanner already running', 'warn');
+      return;
+    }
+
     try {
       const video = document.getElementById('video');
       const container = document.getElementById('video-container');
-      
+
       this.scanner = new QrScanner(video, (result) => this.handleQRData(result), {
         returnDetailedScanResult: true,
         highlightScanRegion: true,
         highlightCodeOutline: true,
         maxScansPerSecond: 3
       });
-      
+
       await this.scanner.start();
-      
+
       container.style.display = 'block';
       document.getElementById('start-btn').disabled = true;
       document.getElementById('stop-btn').disabled = false;
-      
+
       this.log('🎥 Camera started - Ready for QR codes', 'success');
       this.log('🔍 Scanning for file transfer with integrity checking...', 'info');
-      
+
     } catch (error) {
       this.log('❌ Failed to start camera: ' + error.message, 'error');
+      this.scanner = null; // Reset scanner on error
     }
   }
   
