@@ -136,7 +136,7 @@ window.cryptoJSLoaded = false;
 </script>
 
 <!-- Nimiq QR Scanner -->
-<script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js"
+<script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"
         crossorigin="anonymous"
         onload="window.qrScannerLoaded = true; console.log('QrScanner loaded')"
         onerror="console.error('Failed to load QrScanner')"></script>
@@ -207,7 +207,7 @@ class IntegrityQRReceiver {
       }
 
       // Set path for worker (iPad compatibility)
-      QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+      QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner-worker.min.js';
 
       this.scannerReady = true;
       this.log('✅ Nimiq QR Scanner ready!', 'success');
