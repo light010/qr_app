@@ -129,11 +129,23 @@
   <div class="hash-display">Calculated SHA-256: <span id="calculated-hash">-</span></div>
 </div>
 
+<script>
+// Pre-declare loading state
+window.qrScannerLoaded = false;
+window.cryptoJSLoaded = false;
+</script>
+
 <!-- Nimiq QR Scanner -->
-<script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js"
+        crossorigin="anonymous"
+        onload="window.qrScannerLoaded = true; console.log('QrScanner loaded')"
+        onerror="console.error('Failed to load QrScanner')"></script>
 
 <!-- Crypto-JS for SHA-256 calculation -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"
+        crossorigin="anonymous"
+        onload="window.cryptoJSLoaded = true; console.log('CryptoJS loaded')"
+        onerror="console.error('Failed to load CryptoJS')"></script>
 
 <script>
 class IntegrityQRReceiver {
@@ -159,28 +171,54 @@ class IntegrityQRReceiver {
 
   async initializeScanner() {
     try {
+      this.log('⏳ Loading QR Scanner libraries...', 'info');
+
       // Wait for both libraries to load with timeout
-      const timeout = 10000; // 10 seconds
+      const timeout = 15000; // 15 seconds
       const startTime = Date.now();
+      const checkInterval = 50; // Check every 50ms
 
-      this.log('⏳ Loading QR Scanner library...', 'info');
+      while (!window.qrScannerLoaded || !window.cryptoJSLoaded ||
+             typeof QrScanner === 'undefined' || typeof CryptoJS === 'undefined') {
 
-      while (typeof QrScanner === 'undefined' || typeof CryptoJS === 'undefined') {
-        if (Date.now() - startTime > timeout) {
-          throw new Error('Timeout loading libraries. Check your internet connection.');
+        const elapsed = Date.now() - startTime;
+
+        if (elapsed > timeout) {
+          const qrStatus = window.qrScannerLoaded && typeof QrScanner !== 'undefined' ? '✓' : '✗';
+          const cryptoStatus = window.cryptoJSLoaded && typeof CryptoJS !== 'undefined' ? '✓' : '✗';
+
+          throw new Error(
+            `Timeout loading libraries (QrScanner: ${qrStatus}, CryptoJS: ${cryptoStatus}). ` +
+            'Please check your internet connection or try a different browser.'
+          );
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Log progress every 2 seconds
+        if (Math.floor(elapsed / 2000) > Math.floor((elapsed - checkInterval) / 2000)) {
+          const loadingStatus = [];
+          if (!window.qrScannerLoaded) loadingStatus.push('QR Scanner');
+          if (!window.cryptoJSLoaded) loadingStatus.push('CryptoJS');
+          if (loadingStatus.length > 0) {
+            this.log(`⏳ Still loading: ${loadingStatus.join(', ')}...`, 'info');
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
       }
 
       // Set path for worker (iPad compatibility)
       QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
 
       this.scannerReady = true;
-      this.log('✅ Nimiq QR Scanner initialized', 'success');
+      this.log('✅ Nimiq QR Scanner ready!', 'success');
       this.log('🔒 SHA-256 integrity checking enabled', 'integrity');
+      this.log('📷 Click "Start Scanner" to begin', 'info');
     } catch (error) {
       this.log('❌ Scanner setup failed: ' + error.message, 'error');
-      this.log('💡 Try refreshing the page or check your internet connection', 'warn');
+      this.log('💡 Troubleshooting tips:', 'warn');
+      this.log('   • Check your internet connection', 'warn');
+      this.log('   • Try refreshing the page (Ctrl+R)', 'warn');
+      this.log('   • Check browser console for errors (F12)', 'warn');
     }
   }
 
