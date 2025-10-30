@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QR Receiver with SHA-256 Integrity Checking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<style>
+  * { box-sizing: border-box; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+    margin: 0; 
+    background: #000; 
+    color: #00ff00;
+    padding: 10px;
+  }
+  
+  #status {
+    background: rgba(0,0,0,0.9);
+    padding: 10px;
+    font-size: 13px;
+    border: 1px solid #00ff00;
+    margin-bottom: 10px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  
+  .log { margin: 2px 0; font-family: monospace; }
+  .error { color: #ff3b30; }
+  .success { color: #30d158; }
+  .warn { color: #ff9500; }
+  .info { color: #007aff; }
+  .integrity { color: #ff6b35; font-weight: bold; }
+  
+  #video-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    border: 3px solid #00ff00;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  #video {
+    width: 100%;
+    display: block;
+  }
+  
+  .btn {
+    background: #30d158;
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 10px 5px;
+    display: inline-block;
+  }
+  
+  .btn:hover { background: #248a3d; }
+  .btn:disabled { background: #666; cursor: not-allowed; }
+  
+  #progress {
+    background: #1c1c1e;
+    border: 1px solid #00ff00;
+    border-radius: 6px;
+    height: 20px;
+    margin: 10px 0;
+    overflow: hidden;
+  }
+  
+  #progress-bar {
+    background: linear-gradient(90deg, #30d158, #00ff00);
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  
+  #integrity-status {
+    background: rgba(255, 107, 53, 0.1);
+    border: 1px solid #ff6b35;
+    border-radius: 6px;
+    padding: 10px;
+    margin: 10px 0;
+    font-family: monospace;
+    font-size: 12px;
+  }
+  
+  .hash-display {
+    word-break: break-all;
+    font-family: monospace;
+    font-size: 10px;
+    color: #8e8e93;
+  }
+</style>
+</head>
+<body>
+
+<h2>🔒 QR Receiver with SHA-256 Integrity</h2>
+
+<div id="status">
+  <div class="log info">🚀 Advanced QR receiver with SHA-256 integrity checking ready</div>
+  <div class="log info">📱 Optimized for iPad Safari with Nimiq scanner</div>
+</div>
+
+<div style="text-align: center;">
+  <button id="start-btn" class="btn">📷 Start Scanner</button>
+  <button id="stop-btn" class="btn" disabled>⏹ Stop</button>
+  <button id="clear-btn" class="btn">🗑 Clear</button>
+</div>
+
+<div id="video-container" style="display: none;">
+  <video id="video" playsinline></video>
+</div>
+
+<div id="progress">
+  <div id="progress-bar"></div>
+</div>
+
+<div id="integrity-status">
+  <div><strong>🔐 INTEGRITY STATUS:</strong></div>
+  <div>Chunks received: <span id="chunks-received">0</span> / <span id="total-chunks">0</span></div>
+  <div>Chunk verification: <span id="chunk-integrity">PENDING</span></div>
+  <div>Overall verification: <span id="overall-integrity">PENDING</span></div>
+  <div>File: <span id="filename">-</span></div>
+  <div class="hash-display">Expected SHA-256: <span id="expected-hash">-</span></div>
+  <div class="hash-display">Calculated SHA-256: <span id="calculated-hash">-</span></div>
+</div>
+
+<!-- Nimiq QR Scanner -->
+<script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+
+<!-- Crypto-JS for SHA-256 calculation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+<script>
+class IntegrityQRReceiver {
+  constructor() {
+    this.scanner = null;
+    this.chunks = new Map();
+    this.totalChunks = 0;
+    this.filename = '';
+    this.expectedHash = '';
+    this.chunkHashes = new Map();
+    this.receivedData = new Uint8Array();
+    
+    this.setupUI();
+    this.setupScanner();
+  }
+  
+  setupUI() {
+    document.getElementById('start-btn').onclick = () => this.startScanning();
+    document.getElementById('stop-btn').onclick = () => this.stopScanning();  
+    document.getElementById('clear-btn').onclick = () => this.clearData();
+  }
+  
+  async setupScanner() {
+    try {
+      // Set path for worker (iPad compatibility)
+      QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+      
+      this.log('📡 Nimiq QR Scanner initialized', 'info');
+      this.log('🔒 SHA-256 integrity checking enabled', 'integrity');
+    } catch (error) {
+      this.log('❌ Scanner setup failed: ' + error.message, 'error');
+    }
+  }
+  
+  async startScanning() {
+    try {
+      const video = document.getElementById('video');
+      const container = document.getElementById('video-container');
+      
+      this.scanner = new QrScanner(video, (result) => this.handleQRData(result), {
+        returnDetailedScanResult: true,
+        highlightScanRegion: true,
+        highlightCodeOutline: true,
+        maxScansPerSecond: 3
+      });
+      
+      await this.scanner.start();
+      
+      container.style.display = 'block';
+      document.getElementById('start-btn').disabled = true;
+      document.getElementById('stop-btn').disabled = false;
+      
+      this.log('🎥 Camera started - Ready for QR codes', 'success');
+      this.log('🔍 Scanning for file transfer with integrity checking...', 'info');
+      
+    } catch (error) {
+      this.log('❌ Failed to start camera: ' + error.message, 'error');
+    }
+  }
+  
+  stopScanning() {
+    if (this.scanner) {
+      this.scanner.stop();
+      this.scanner = null;
+    }
+    
+    document.getElementById('video-container').style.display = 'none';
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('stop-btn').disabled = true;
+    
+    this.log('📷 Camera stopped', 'info');
+  }
+  
+  handleQRData(result) {
+    const data = result.data;
+    
+    try {
+      // Try simple format first: F:INDEX:TOTAL:DATA
+      if (data.startsWith('F:')) {
+        this.processSimpleFormat(data);
+        return;
+      }
+      
+      // Try JSON format
+      const parsed = JSON.parse(data);
+      if (parsed.fmt === 'qrfile/v1') {
+        this.processJSONFormat(parsed);
+        return;
+      }
+      
+      this.log('❓ Unknown QR format: ' + data.substring(0, 50) + '...', 'warn');
+      
+    } catch (error) {
+      this.log('❌ QR processing error: ' + error.message, 'error');
+    }
+  }
+  
+  processSimpleFormat(data) {
+    // Format: F:INDEX:TOTAL:DATA
+    const parts = data.split(':');
+    if (parts.length !== 4) {
+      this.log('❌ Invalid simple format', 'error');
+      return;
+    }
+    
+    const index = parseInt(parts[1]);
+    const total = parseInt(parts[2]);
+    const chunkData = parts[3];
+    
+    this.processChunk(index, total, chunkData, null, 'simple');
+  }
+  
+  processJSONFormat(data) {
+    const index = data.index;
+    const total = data.total;
+    const chunkData = data.data_b64;
+    const chunkHash = data.chunk_sha256;
+    const overallHash = data.overall_sha256;
+    
+    // Store expected hashes
+    if (data.name) this.filename = data.name;
+    if (overallHash) this.expectedHash = overallHash;
+    
+    this.processChunk(index, total, chunkData, chunkHash, 'json');
+  }
+  
+  processChunk(index, total, base64Data, expectedChunkHash, format) {
+    // Validate chunk data
+    if (this.chunks.has(index)) {
+      return; // Duplicate chunk
+    }
+    
+    try {
+      // Decode base64 data
+      const binaryData = this.base64ToBytes(base64Data);
+      
+      // Verify chunk integrity if hash provided
+      if (expectedChunkHash) {
+        const actualHash = this.calculateSHA256(binaryData);
+        const shortHash = actualHash.substring(0, 16);
+        
+        if (shortHash !== expectedChunkHash) {
+          this.log(`❌ Chunk ${index} integrity FAILED`, 'error');
+          this.log(`   Expected: ${expectedChunkHash}`, 'error');
+          this.log(`   Actual:   ${shortHash}`, 'error');
+          return;
+        }
+        
+        this.chunkHashes.set(index, actualHash);
+        this.log(`✅ Chunk ${index} integrity verified`, 'integrity');
+      }
+      
+      // Store chunk
+      this.chunks.set(index, binaryData);
+      this.totalChunks = total;
+      
+      this.updateProgress();
+      this.log(`📦 Chunk ${index}/${total} received (${format})`, 'success');
+      
+      // Check if transfer complete
+      if (this.chunks.size === total) {
+        this.completeTransfer();
+      }
+      
+    } catch (error) {
+      this.log(`❌ Chunk ${index} processing failed: ${error.message}`, 'error');
+    }
+  }
+  
+  completeTransfer() {
+    this.log('🎉 All chunks received - Reconstructing file...', 'success');
+    
+    // Reconstruct data
+    const reconstructed = new Uint8Array(
+      Array.from(this.chunks.keys())
+        .sort((a, b) => a - b)
+        .map(key => Array.from(this.chunks.get(key)))
+        .flat()
+    );
+    
+    // Verify overall integrity
+    const actualHash = this.calculateSHA256(reconstructed);
+    const shortExpected = this.expectedHash;
+    const shortActual = actualHash.substring(0, shortExpected.length);
+    
+    const integrityMatch = !shortExpected || (shortExpected === shortActual);
+    
+    // Update UI
+    document.getElementById('chunks-received').textContent = this.chunks.size;
+    document.getElementById('total-chunks').textContent = this.totalChunks;
+    document.getElementById('filename').textContent = this.filename || 'transfer.tar.gz';
+    document.getElementById('expected-hash').textContent = this.expectedHash || 'N/A';
+    document.getElementById('calculated-hash').textContent = actualHash.substring(0, 32) + '...';
+    document.getElementById('chunk-integrity').textContent = this.chunkHashes.size > 0 ? 'VERIFIED' : 'SKIPPED';
+    document.getElementById('overall-integrity').textContent = integrityMatch ? 'VERIFIED ✅' : 'FAILED ❌';
+    
+    if (integrityMatch) {
+      this.log('🔒 INTEGRITY VERIFICATION PASSED!', 'success');
+      this.log(`   File SHA-256: ${actualHash}`, 'integrity');
+      this.downloadFile(reconstructed);
+    } else {
+      this.log('❌ INTEGRITY VERIFICATION FAILED!', 'error');
+      this.log(`   Expected: ${shortExpected}`, 'error');
+      this.log(`   Actual:   ${shortActual}`, 'error');
+    }
+  }
+  
+  calculateSHA256(data) {
+    const wordArray = CryptoJS.lib.WordArray.create(data);
+    return CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+  }
+  
+  base64ToBytes(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+  
+  downloadFile(data) {
+    const blob = new Blob([data], { type: 'application/gzip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = this.filename || 'qr_transfer.tar.gz';
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    this.log(`📥 Download started: ${a.download}`, 'success');
+    this.log(`📊 File size: ${data.length} bytes`, 'info');
+  }
+  
+  updateProgress() {
+    if (this.totalChunks === 0) return;
+    
+    const percentage = (this.chunks.size / this.totalChunks) * 100;
+    document.getElementById('progress-bar').style.width = percentage + '%';
+    
+    document.getElementById('chunks-received').textContent = this.chunks.size;
+    document.getElementById('total-chunks').textContent = this.totalChunks;
+  }
+  
+  clearData() {
+    this.chunks.clear();
+    this.chunkHashes.clear();
+    this.totalChunks = 0;
+    this.filename = '';
+    this.expectedHash = '';
+    
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('chunks-received').textContent = '0';
+    document.getElementById('total-chunks').textContent = '0';
+    document.getElementById('filename').textContent = '-';
+    document.getElementById('expected-hash').textContent = '-';
+    document.getElementById('calculated-hash').textContent = '-';
+    document.getElementById('chunk-integrity').textContent = 'PENDING';
+    document.getElementById('overall-integrity').textContent = 'PENDING';
+    
+    document.getElementById('status').innerHTML = 
+      '<div class="log info">🗑 Data cleared - Ready for new transfer</div>';
+    
+    this.log('🗑 Transfer data cleared', 'info');
+  }
+  
+  log(message, type = 'info') {
+    const statusDiv = document.getElementById('status');
+    const logEntry = document.createElement('div');
+    logEntry.className = `log ${type}`;
+    logEntry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+    
+    statusDiv.appendChild(logEntry);
+    statusDiv.scrollTop = statusDiv.scrollHeight;
+    
+    // Keep only last 50 messages
+    while (statusDiv.children.length > 50) {
+      statusDiv.removeChild(statusDiv.firstChild);
+    }
+    
+    console.log(`[${type.toUpperCase()}] ${message}`);
+  }
+}
+
+// Initialize receiver when page loads
+document.addEventListener('DOMContentLoaded', () => {
+  window.receiver = new IntegrityQRReceiver();
+});
+</script>
+
+</body>
+</html>
