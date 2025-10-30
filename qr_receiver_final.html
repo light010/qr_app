@@ -130,10 +130,10 @@
 </div>
 
 <!-- Nimiq QR Scanner -->
-<script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner.umd.min.js" crossorigin="anonymous"></script>
 
 <!-- Crypto-JS for SHA-256 calculation -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" crossorigin="anonymous"></script>
 
 <script>
 class IntegrityQRReceiver {
@@ -145,43 +145,52 @@ class IntegrityQRReceiver {
     this.expectedHash = '';
     this.chunkHashes = new Map();
     this.receivedData = new Uint8Array();
-    
+    this.scannerReady = false;
+
     this.setupUI();
-    this.setupScanner();
+    this.initializeScanner();
   }
-  
+
   setupUI() {
     document.getElementById('start-btn').onclick = () => this.startScanning();
-    document.getElementById('stop-btn').onclick = () => this.stopScanning();  
+    document.getElementById('stop-btn').onclick = () => this.stopScanning();
     document.getElementById('clear-btn').onclick = () => this.clearData();
   }
-  
-  async setupScanner() {
+
+  async initializeScanner() {
     try {
-      // Wait for QrScanner to be available
-      if (typeof QrScanner === 'undefined') {
-        this.log('⏳ Waiting for QR Scanner library...', 'info');
-        await new Promise((resolve) => {
-          const checkInterval = setInterval(() => {
-            if (typeof QrScanner !== 'undefined') {
-              clearInterval(checkInterval);
-              resolve();
-            }
-          }, 100);
-        });
+      // Wait for both libraries to load with timeout
+      const timeout = 10000; // 10 seconds
+      const startTime = Date.now();
+
+      this.log('⏳ Loading QR Scanner library...', 'info');
+
+      while (typeof QrScanner === 'undefined' || typeof CryptoJS === 'undefined') {
+        if (Date.now() - startTime > timeout) {
+          throw new Error('Timeout loading libraries. Check your internet connection.');
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       // Set path for worker (iPad compatibility)
       QrScanner.WORKER_PATH = 'https://cdn.jsdelivr.net/npm/@nimiq/qr-scanner@1.4.2/qr-scanner-worker.min.js';
 
-      this.log('📡 Nimiq QR Scanner initialized', 'info');
+      this.scannerReady = true;
+      this.log('✅ Nimiq QR Scanner initialized', 'success');
       this.log('🔒 SHA-256 integrity checking enabled', 'integrity');
     } catch (error) {
       this.log('❌ Scanner setup failed: ' + error.message, 'error');
+      this.log('💡 Try refreshing the page or check your internet connection', 'warn');
     }
   }
 
   async startScanning() {
+    // Check if scanner is ready
+    if (!this.scannerReady) {
+      this.log('⚠️ Scanner not ready yet. Please wait...', 'warn');
+      return;
+    }
+
     // Prevent multiple scanner instances
     if (this.scanner) {
       this.log('⚠️ Scanner already running', 'warn');
