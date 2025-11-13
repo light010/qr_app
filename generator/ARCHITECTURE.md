@@ -23,6 +23,24 @@ The QR Generator is an enterprise-grade application for encoding files, data, an
 
 ---
 
+### ⚠️ AIR-GAP DEPLOYMENT NOTE
+
+**For Military/Classified Environments - REMOVE these sections:**
+- Section 2.2.1: API Interface (REST/WebSocket) - Use CLI/GUI only
+- Section 5.1: FastAPI Application - Not applicable for air-gap
+- Section 7.1: Docker Configuration - Use standalone executable instead
+- Section 7.2: Docker Compose - Not applicable for air-gap
+
+**Keep these sections:**
+- CLI Interface ✅
+- GUI Interface ✅  
+- Core business logic ✅
+- All services (compression, encryption, etc.) ✅
+- Standalone deployment ✅
+
+**See:** `../ENTERPRISE_GUIDE.md` → AIR-GAP DEPLOYMENT section for complete procedures.
+
+
 ## 2. System Architecture
 
 ### 2.1 High-Level Architecture

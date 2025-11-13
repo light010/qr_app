@@ -828,3 +828,266 @@ MIT License - see LICENSE file for details
 **Last Updated**: 2025-11-13
 **Status**: Ready for Implementation
 **Next Review**: 2025-12-13
+
+---
+
+## 🔒 AIR-GAP DEPLOYMENT (MILITARY-GRADE)
+
+### Critical Requirements for Air-Gap Compliance
+
+**⚠️ IMPORTANT**: True air-gap deployment means **ZERO network connectivity**. The following features must be REMOVED or deployed offline-only:
+
+#### Generator Requirements
+- ❌ **NO REST API** - Remove FastAPI/web server code entirely
+- ❌ **NO WebSocket** - Remove all network communication
+- ❌ **NO Docker Hub** - Use offline Docker images only or skip Docker
+- ❌ **NO Cloud Monitoring** - Use local file logging only
+- ✅ **CLI/GUI Only** - Standalone executable deployment
+- ✅ **USB Deployment** - Physical media transfer only
+
+#### Scanner Requirements  
+- ❌ **NO CDN Libraries** - Bundle ALL JavaScript libraries locally
+- ❌ **NO Web Hosting** - Deploy to local file system only
+- ❌ **NO Service Worker Network Fallback** - Offline-only mode
+- ✅ **Single HTML File** - All dependencies inlined (~500KB)
+- ✅ **USB/CD Deployment** - Physical media distribution
+
+### Air-Gap Deployment Process
+
+```
+DEVELOPMENT MACHINE (Connected)
+    ↓
+[Build & Package]
+    ↓
+[Hash Verification]
+    ↓
+[Copy to USB/CD with Write-Protection]
+    ↓
+[Apply Tamper-Evident Seal]
+    ↓
+[Physical Transport - Secure Courier]
+    ↓
+AIR-GAPPED ENVIRONMENT (Isolated)
+    ↓
+[Verify Seal & Hash]
+    ↓
+[Install Locally]
+    ↓
+[Test - Verify NO Network Activity]
+    ↓
+[Destroy/Secure Media]
+```
+
+### Generator: Build for Air-Gap
+
+```bash
+# 1. Build single executable (NO network code)
+cd generator/
+pyinstaller --onefile --name QRGenerator src/main.py
+
+# 2. Verify no network symbols
+nm dist/QRGenerator | grep -E "socket|connect|http" || echo "✅ Clean"
+
+# 3. Calculate hash
+sha256sum dist/QRGenerator > deployment_hash.txt
+
+# 4. Copy to USB (write-protected)
+cp dist/QRGenerator /mnt/usb/
+cp deployment_hash.txt /mnt/usb/
+
+# 5. Verify and seal USB
+```
+
+### Scanner: Build for Air-Gap
+
+```bash
+# 1. Bundle ALL dependencies locally
+cd scanner/public/
+
+# Download qr-scanner library locally
+mkdir -p lib/
+curl -o lib/qr-scanner.umd.min.js \
+  https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js
+
+# 2. Update index.html to use local library
+sed -i 's|https://cdn.jsdelivr.net.*qr-scanner.*|./lib/qr-scanner.umd.min.js|g' index.html
+
+# 3. Create single-file version (all inlined)
+cat > scanner_airgap.html << 'HTML'
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>QR Scanner</title>
+<style>/* All CSS inlined here */</style>
+</head>
+<body>
+<!-- All HTML here -->
+<script>/* All JS including qr-scanner library inlined */</script>
+</body>
+</html>
+HTML
+
+# 4. Calculate hash
+sha256sum scanner_airgap.html > scanner_hash.txt
+
+# 5. Burn to CD-R (recommended) or copy to USB
+```
+
+### Verification Checklist
+
+**Before Deployment:**
+- [ ] Generator: No network imports in code
+- [ ] Generator: No URLs in binary (check with `strings`)
+- [ ] Generator: Single executable with no dependencies
+- [ ] Scanner: No `http://` or `https://` in HTML
+- [ ] Scanner: All libraries present in `lib/` folder
+- [ ] Scanner: Works offline (test with network disabled)
+- [ ] Both: Hashes calculated and documented
+- [ ] Both: Physical media write-protected
+
+**After Deployment:**
+- [ ] Hashes verified on air-gap machine
+- [ ] No network activity detected (use `tcpdump` or `wireshark`)
+- [ ] Applications function correctly offline
+- [ ] Test file transfer successful
+- [ ] Audit trail documented
+
+### Deployment to Classified Environment
+
+```bash
+# On air-gap machine (after transport):
+
+# 1. Verify hash
+sha256sum QRGenerator  # Compare with deployment_hash.txt
+sha256sum scanner_airgap.html  # Compare with scanner_hash.txt
+
+# 2. Install generator
+sudo cp QRGenerator /opt/qr/
+sudo chmod +x /opt/qr/QRGenerator
+
+# 3. Install scanner
+cp scanner_airgap.html ~/Desktop/qr_scanner.html
+
+# 4. Test with network monitoring
+sudo tcpdump -i any &  # Monitor ALL network activity
+/opt/qr/QRGenerator generate test.txt
+# Open scanner_airgap.html in browser
+# Scan QR codes
+# Verify: tcpdump shows ZERO network packets
+kill %1
+
+# 5. If test passes, approve for use
+```
+
+### Security Compliance
+
+**Classification Levels Supported:**
+- UNCLASSIFIED (code itself)
+- SECRET (operational deployment)
+- TOP SECRET (with additional controls)
+
+**Required Controls:**
+- Physical security of deployment media
+- Chain of custody documentation
+- Hash verification at source and destination
+- Network activity monitoring during testing
+- Incident response procedures
+- Periodic security audits
+
+### Incident Response
+
+**If Network Activity Detected:**
+1. IMMEDIATELY power off system
+2. Preserve all logs
+3. Notify security officer
+4. Document incident
+5. Await security investigation
+6. Do NOT restart until cleared
+
+**If Hash Mismatch:**
+1. Do NOT install/use
+2. Quarantine media
+3. Notify security officer
+4. Request new deployment
+5. Document in audit trail
+
+---
+AIRGEOF
+
+---
+
+## 🔒 AIR-GAP DEPLOYMENT (MILITARY-GRADE)
+
+### ⚠️ Critical: True Air-Gap Requirements
+
+**REMOVE these features for air-gap compliance:**
+- ❌ Generator: REST API, WebSocket, Docker (network-based), external monitoring
+- ❌ Scanner: CDN libraries, web hosting deployment, service worker network fallback
+
+**USE these instead:**
+- ✅ Generator: Single executable, CLI/GUI only, USB deployment
+- ✅ Scanner: All libraries bundled locally, single HTML file, USB/CD deployment
+
+### Quick Air-Gap Deployment
+
+#### Generator
+```bash
+# Build standalone executable
+pyinstaller --onefile src/main.py
+
+# Verify no network code
+nm dist/main | grep socket || echo "✅ Clean"
+
+# Deploy via USB
+cp dist/main /mnt/usb/QRGenerator
+sha256sum /mnt/usb/QRGenerator > /mnt/usb/hash.txt
+```
+
+#### Scanner
+```bash
+# Bundle libraries locally (do once)
+mkdir -p public/lib/
+curl -o public/lib/qr-scanner.min.js \
+  https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js
+
+# Update HTML to use ./lib/qr-scanner.min.js instead of CDN
+
+# Create single-file version
+# Inline all CSS, JS, and libraries into one HTML file
+
+# Deploy via USB/CD
+cp scanner.html /mnt/usb/
+```
+
+### Verification
+
+```bash
+# On air-gap machine:
+# 1. Verify hash
+sha256sum QRGenerator  # Must match hash.txt
+
+# 2. Test with network monitoring
+sudo tcpdump -i any &
+./QRGenerator generate test.txt
+# Open scanner.html
+# Verify: NO network packets
+kill %1
+```
+
+### Security Compliance
+
+**Supported Classifications:**
+- Code: UNCLASSIFIED
+- Deployment: SECRET and above
+- Operations: TOP SECRET (with controls)
+
+**Incident Response:**
+- Network activity detected → Power off immediately
+- Hash mismatch → Do not install, notify security
+- Document all incidents in audit trail
+
+**Required Documentation:**
+- Chain of custody forms
+- Hash verification records
+- Installation audit trail
+- Periodic security reviews
+

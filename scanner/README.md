@@ -494,3 +494,41 @@ A: Technically unlimited, practically 100MB+ depending on device.
 **Version**: 3.0.0
 **Last Updated**: 2025-11-13
 **Status**: Production Ready
+
+---
+
+## 🔒 Air-Gap Deployment
+
+**⚠️ For Military/Classified Environments:**
+
+```bash
+# Bundle ALL libraries locally (NO CDN)
+mkdir -p public/lib/
+curl -o public/lib/qr-scanner.min.js \
+  https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js
+
+# Update index.html: Use ./lib/qr-scanner.min.js
+
+# Deploy via USB/CD (not web hosting)
+cp public/index.html /mnt/usb/scanner.html
+```
+
+**Remove for air-gap:**
+- ❌ CDN libraries (jsdelivr, unpkg)
+- ❌ Web hosting (GitHub Pages, Netlify)
+- ❌ Service worker network fallback
+
+**Use instead:**
+- ✅ All libraries in `./lib/` folder
+- ✅ Single HTML file (all dependencies inlined)
+- ✅ Deploy to local file system
+- ✅ Open with `file:///path/to/scanner.html`
+
+**Verification:**
+```bash
+# Must return nothing:
+grep -i "cdn\|http://" scanner.html
+```
+
+See **ENTERPRISE_GUIDE.md → AIR-GAP DEPLOYMENT** for complete procedures.
+

@@ -11,6 +11,39 @@ The QR Scanner is an enterprise-grade Progressive Web Application (PWA) for rece
 - **Platform Agnostic**: Adaptive to device capabilities
 - **Security by Design**: Zero persistence, encrypted storage options
 - **Performance**: Real-time scanning with optimized memory usage
+
+### ⚠️ AIR-GAP DEPLOYMENT NOTE
+
+**For Military/Classified Environments - CRITICAL CHANGES:**
+
+**REMOVE:**
+- All CDN dependencies (Section 3.1: External libraries from jsdelivr.net)
+- Service worker network fallback (Section 4.1: Network fetch)
+- Web hosting deployment (Section 9: GitHub Pages, Netlify, Vercel)
+
+**REPLACE WITH:**
+- Bundle ALL libraries in `./lib/` folder locally
+- Service worker: offline-only, NO network fallback
+- Deployment: USB/CD to local file system only
+
+**Required:**
+```bash
+# Download libraries locally (do ONCE on connected machine)
+mkdir -p public/lib/
+curl -o public/lib/qr-scanner.min.js \
+  https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js
+
+# Update all HTML: Replace CDN URLs with ./lib/qr-scanner.min.js
+```
+
+**Verification:**
+```bash
+grep -i "http://" public/*.html  # Must return NOTHING
+grep -i "cdn\." public/*.html    # Must return NOTHING
+```
+
+**See:** `../ENTERPRISE_GUIDE.md` → AIR-GAP DEPLOYMENT for complete procedures.
+
 - **Accessibility**: WCAG 2.1 AA compliant, keyboard navigation
 
 ### 1.3 Key Requirements

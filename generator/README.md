@@ -374,3 +374,28 @@ MIT License - see LICENSE file for details
 **Version**: 3.0.0
 **Last Updated**: 2025-11-13
 **Status**: Production Ready
+
+---
+
+## 🔒 Air-Gap Deployment
+
+**⚠️ For Military/Classified Environments:**
+
+```bash
+# Build standalone executable (NO network code)
+pyinstaller --onefile src/main.py
+
+# Deploy via USB (not API/Docker)
+# See ENTERPRISE_GUIDE.md → AIR-GAP DEPLOYMENT section
+```
+
+**Remove for air-gap:**
+- ❌ API mode (`api` command)
+- ❌ Docker deployment
+- ❌ External monitoring
+
+**Use instead:**
+- ✅ CLI: `qr-generator generate file.txt`
+- ✅ GUI: `qr-generator gui`
+- ✅ USB deployment only
+
