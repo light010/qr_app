@@ -1,0 +1,1013 @@
+# QR Scanner - Enterprise Architecture
+
+## 1. Executive Summary
+
+### 1.1 Purpose
+The QR Scanner is an enterprise-grade Progressive Web Application (PWA) for receiving and reconstructing files from QR code sequences. It operates entirely client-side, supports air-gapped operation, and works across all modern platforms (iOS, Android, Windows, macOS, Linux).
+
+### 1.2 Design Philosophy
+- **Client-Side First**: 100% browser-based, no server required
+- **Progressive Enhancement**: Works offline, installable as PWA
+- **Platform Agnostic**: Adaptive to device capabilities
+- **Security by Design**: Zero persistence, encrypted storage options
+- **Performance**: Real-time scanning with optimized memory usage
+- **Accessibility**: WCAG 2.1 AA compliant, keyboard navigation
+
+### 1.3 Key Requirements
+- Real-time QR code detection (5-30 FPS based on device)
+- Multi-protocol support (v1, v2, v3 with extensibility)
+- Large file assembly (up to 100MB+ in chunks)
+- Offline-capable Progressive Web App
+- Cross-platform camera access
+- Memory-efficient chunk management
+- File preview for 20+ file types
+- IndexedDB persistence for resume capability
+- End-to-end encryption support
+
+---
+
+## 2. System Architecture
+
+### 2.1 High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     QR Scanner PWA Application                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              Progressive Web App Layer                   │   │
+│  │  • Service Worker (offline support)                      │   │
+│  │  • Web App Manifest (installability)                     │   │
+│  │  • Push Notifications (transfer complete)                │   │
+│  └────────────────────┬────────────────────────────────────┘   │
+│                       │                                          │
+│  ┌────────────────────▼────────────────────────────────────┐   │
+│  │              Presentation Layer (UI)                     │   │
+│  │  • Camera View Component                                 │   │
+│  │  • Progress Display Component                            │   │
+│  │  • File Preview Component                                │   │
+│  │  • Control Panel Component                               │   │
+│  └────────────────────┬────────────────────────────────────┘   │
+│                       │                                          │
+│  ┌────────────────────▼────────────────────────────────────┐   │
+│  │           Application Core (Business Logic)              │   │
+│  │  • QR Scanning Engine                                    │   │
+│  │  • Chunk Assembly Manager                                │   │
+│  │  • Protocol Parser                                       │   │
+│  │  • File Reconstruction Service                           │   │
+│  │  • State Management                                      │   │
+│  └─────┬──────────┬──────────┬──────────┬─────────────────┘   │
+│        │          │          │          │                       │
+│   ┌────▼───┐ ┌───▼────┐ ┌──▼─────┐ ┌─▼────────┐             │
+│   │Camera  │ │Storage │ │Crypto  │ │Preview   │             │
+│   │Service │ │Service │ │Service │ │Service   │             │
+│   └────────┘ └────────┘ └────────┘ └──────────┘             │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │          Infrastructure Layer (Browser APIs)             │   │
+│  │  • MediaDevices API (camera access)                      │   │
+│  │  • IndexedDB API (persistence)                           │   │
+│  │  • Web Crypto API (encryption)                           │   │
+│  │  • File System Access API (downloads)                    │   │
+│  │  • Web Workers (background processing)                   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 Layered Architecture
+
+#### 2.2.1 Presentation Layer (UI Components)
+**Responsibility**: User interface, user interactions
+**Technologies**: HTML5, CSS3, Vanilla JavaScript (ES2020+)
+**Components**:
+- `CameraViewController`: Camera stream management and display
+- `ProgressViewController`: Real-time transfer progress
+- `PreviewViewController`: File preview with type-specific renderers
+- `ControlPanelController`: User controls and settings
+- `NotificationController`: Toast notifications and alerts
+- `ThemeController`: Light/dark theme management
+
+**Design Patterns**:
+- **MVC**: Model-View-Controller for UI components
+- **Observer**: Real-time UI updates via event bus
+- **Component**: Reusable UI components
+
+#### 2.2.2 Application Layer (Core Logic)
+**Responsibility**: Business logic orchestration
+**Components**:
+- `QRScanningEngine`: QR detection and decoding
+- `ChunkAssemblyManager`: Chunk collection and ordering
+- `ProtocolParser`: Multi-protocol parsing
+- `FileReconstructionService`: File assembly from chunks
+- `SessionManager`: Transfer session management
+- `ErrorRecoveryManager`: Retry and error handling
+- `StateManager`: Application state management
+
+**Design Patterns**:
+- **State Machine**: Transfer state management
+- **Strategy**: Different scanning/assembly strategies
+- **Pipeline**: File reconstruction pipeline
+- **Observer**: Event-driven architecture
+
+#### 2.2.3 Service Layer (Reusable Services)
+**Responsibility**: Cross-cutting concerns
+**Components**:
+- `CameraService`: Cross-platform camera access
+- `StorageService`: IndexedDB operations
+- `CryptoService`: Encryption/decryption
+- `CompressionService`: Decompression algorithms
+- `HashingService`: Integrity verification
+- `PreviewService`: File preview generation
+- `DownloadService`: File download management
+- `MetricsService`: Performance tracking
+- `LoggingService`: Structured logging
+
+**Design Patterns**:
+- **Singleton**: Stateful services (camera, storage)
+- **Factory**: Service creation
+- **Adapter**: Browser API adapters
+
+#### 2.2.4 Infrastructure Layer (Browser APIs)
+**Responsibility**: Browser integration
+**Components**:
+- `MediaDevicesAdapter`: Camera API wrapper
+- `IndexedDBAdapter`: Storage API wrapper
+- `WebCryptoAdapter`: Crypto API wrapper
+- `FileSystemAdapter`: File API wrapper
+- `ServiceWorkerAdapter`: SW API wrapper
+- `WebWorkerAdapter`: Worker API wrapper
+
+**Design Patterns**:
+- **Adapter**: Standardize browser API access
+- **Facade**: Simplify complex APIs
+- **Promise/Async**: Asynchronous operations
+
+---
+
+## 3. Core Components Deep Dive
+
+### 3.1 QR Scanning Engine
+
+```javascript
+/**
+ * QR Scanning Engine
+ *
+ * Handles real-time QR code detection using:
+ * - qr-scanner library (Nimiq-based, WebAssembly)
+ * - Web Workers for background processing
+ * - Adaptive scan rate based on device performance
+ *
+ * Performance Optimizations:
+ * - Scan only every N frames based on device tier
+ * - Downsample video for faster processing
+ * - Deduplication to avoid processing same QR multiple times
+ * - Lazy initialization of heavy resources
+ */
+
+class QRScanningEngine {
+    constructor(config) {
+        this.config = config;
+        this.scanner = null;
+        this.isScanning = false;
+        this.lastScanTime = 0;
+        this.scanInterval = config.scanInterval || 100; // ms
+        this.dedupCache = new Map(); // Prevent duplicate scans
+        this.dedupTimeout = config.dedupTimeout || 1000; // ms
+        this.performanceTier = this.detectPerformanceTier();
+    }
+
+    /**
+     * Detect device performance tier
+     * Returns: 'high' | 'medium' | 'low'
+     */
+    detectPerformanceTier() {
+        const memory = navigator.deviceMemory || 4;
+        const cores = navigator.hardwareConcurrency || 4;
+
+        if (memory >= 8 && cores >= 8) return 'high';
+        if (memory >= 4 && cores >= 4) return 'medium';
+        return 'low';
+    }
+
+    /**
+     * Initialize scanner with adaptive settings
+     */
+    async initialize(videoElement) {
+        const QrScanner = await this.loadQrScannerLibrary();
+
+        // Adaptive settings based on performance tier
+        const settings = {
+            highlightScanRegion: this.config.debug,
+            highlightCodeOutline: this.config.debug,
+            maxScansPerSecond: this.getMaxScansPerSecond(),
+            returnDetailedScanResult: true
+        };
+
+        this.scanner = new QrScanner(
+            videoElement,
+            result => this.handleScanResult(result),
+            settings
+        );
+
+        return this.scanner;
+    }
+
+    /**
+     * Get max scans per second based on device tier
+     */
+    getMaxScansPerSecond() {
+        const tier = this.performanceTier;
+        if (tier === 'high') return 30;
+        if (tier === 'medium') return 15;
+        return 5;
+    }
+
+    /**
+     * Handle scan result with deduplication
+     */
+    handleScanResult(result) {
+        const data = result.data;
+        const now = Date.now();
+
+        // Deduplication: ignore if scanned recently
+        if (this.dedupCache.has(data)) {
+            const lastSeen = this.dedupCache.get(data);
+            if (now - lastSeen < this.dedupTimeout) {
+                return; // Skip duplicate
+            }
+        }
+
+        // Update dedup cache
+        this.dedupCache.set(data, now);
+
+        // Cleanup old entries
+        this.cleanupDedupCache(now);
+
+        // Emit scan event
+        this.emit('scan', { data, timestamp: now });
+    }
+
+    /**
+     * Cleanup deduplication cache
+     */
+    cleanupDedupCache(currentTime) {
+        for (const [key, timestamp] of this.dedupCache.entries()) {
+            if (currentTime - timestamp > this.dedupTimeout * 2) {
+                this.dedupCache.delete(key);
+            }
+        }
+    }
+
+    /**
+     * Start scanning
+     */
+    async start() {
+        if (!this.scanner) {
+            throw new Error('Scanner not initialized');
+        }
+
+        await this.scanner.start();
+        this.isScanning = true;
+        this.emit('started');
+    }
+
+    /**
+     * Stop scanning
+     */
+    stop() {
+        if (this.scanner) {
+            this.scanner.stop();
+        }
+        this.isScanning = false;
+        this.emit('stopped');
+    }
+
+    /**
+     * Destroy scanner and cleanup resources
+     */
+    destroy() {
+        if (this.scanner) {
+            this.scanner.destroy();
+            this.scanner = null;
+        }
+        this.dedupCache.clear();
+    }
+}
+```
+
+### 3.2 Chunk Assembly Manager
+
+```javascript
+/**
+ * Chunk Assembly Manager
+ *
+ * Manages collection, ordering, and assembly of file chunks
+ *
+ * Features:
+ * - Memory-aware storage (RAM vs IndexedDB)
+ * - Missing chunk detection and retry
+ * - Integrity verification (SHA-256 hashing)
+ * - Progress tracking
+ * - Resume capability
+ */
+
+class ChunkAssemblyManager {
+    constructor(storageService, config) {
+        this.storage = storageService;
+        this.config = config;
+        this.chunks = new Map();
+        this.totalChunks = 0;
+        this.receivedCount = 0;
+        this.sessionId = null;
+        this.fileMetadata = null;
+        this.memoryUsage = 0;
+        this.memoryThreshold = config.memoryThreshold || 50 * 1024 * 1024; // 50MB
+        this.useIndexedDB = false;
+    }
+
+    /**
+     * Initialize new session
+     */
+    async initializeSession(sessionId, totalChunks, metadata) {
+        this.sessionId = sessionId;
+        this.totalChunks = totalChunks;
+        this.fileMetadata = metadata;
+        this.chunks.clear();
+        this.receivedCount = 0;
+        this.memoryUsage = 0;
+
+        // Determine storage strategy
+        const estimatedSize = metadata.size || 0;
+        this.useIndexedDB = estimatedSize > this.memoryThreshold;
+
+        if (this.useIndexedDB) {
+            await this.storage.createSession(sessionId, metadata);
+        }
+
+        this.emit('session-initialized', {
+            sessionId,
+            totalChunks,
+            metadata
+        });
+    }
+
+    /**
+     * Add chunk to assembly
+     */
+    async addChunk(chunkData) {
+        const { index, data, hash } = chunkData;
+
+        // Validate chunk
+        if (index < 0 || index >= this.totalChunks) {
+            throw new Error(`Invalid chunk index: ${index}`);
+        }
+
+        // Skip if already received
+        if (this.chunks.has(index)) {
+            return { duplicate: true, progress: this.getProgress() };
+        }
+
+        // Verify hash
+        const computedHash = await this.computeHash(data);
+        if (computedHash !== hash) {
+            throw new Error(`Chunk ${index} hash mismatch`);
+        }
+
+        // Store chunk
+        if (this.useIndexedDB) {
+            await this.storage.saveChunk(this.sessionId, index, data);
+        } else {
+            this.chunks.set(index, data);
+            this.memoryUsage += data.byteLength;
+        }
+
+        this.receivedCount++;
+
+        // Emit progress event
+        const progress = this.getProgress();
+        this.emit('chunk-received', {
+            index,
+            total: this.totalChunks,
+            received: this.receivedCount,
+            progress
+        });
+
+        // Check if complete
+        if (this.isComplete()) {
+            this.emit('transfer-complete');
+        }
+
+        return { duplicate: false, progress };
+    }
+
+    /**
+     * Get missing chunk indices
+     */
+    getMissingChunks() {
+        const missing = [];
+        for (let i = 0; i < this.totalChunks; i++) {
+            if (!this.chunks.has(i)) {
+                missing.push(i);
+            }
+        }
+        return missing;
+    }
+
+    /**
+     * Check if transfer is complete
+     */
+    isComplete() {
+        return this.receivedCount === this.totalChunks;
+    }
+
+    /**
+     * Get progress (0-1)
+     */
+    getProgress() {
+        if (this.totalChunks === 0) return 0;
+        return this.receivedCount / this.totalChunks;
+    }
+
+    /**
+     * Assemble file from chunks
+     */
+    async assembleFile() {
+        if (!this.isComplete()) {
+            throw new Error('Cannot assemble: missing chunks');
+        }
+
+        // Collect all chunks in order
+        const orderedChunks = [];
+
+        if (this.useIndexedDB) {
+            for (let i = 0; i < this.totalChunks; i++) {
+                const chunk = await this.storage.getChunk(this.sessionId, i);
+                orderedChunks.push(chunk);
+            }
+        } else {
+            for (let i = 0; i < this.totalChunks; i++) {
+                orderedChunks.push(this.chunks.get(i));
+            }
+        }
+
+        // Concatenate chunks
+        const totalSize = orderedChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+        const fileData = new Uint8Array(totalSize);
+
+        let offset = 0;
+        for (const chunk of orderedChunks) {
+            fileData.set(new Uint8Array(chunk), offset);
+            offset += chunk.byteLength;
+        }
+
+        // Verify file hash
+        const fileHash = await this.computeHash(fileData);
+        if (fileHash !== this.fileMetadata.checksum) {
+            throw new Error('File hash verification failed');
+        }
+
+        return {
+            data: fileData,
+            metadata: this.fileMetadata
+        };
+    }
+
+    /**
+     * Compute SHA-256 hash
+     */
+    async computeHash(data) {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    /**
+     * Cleanup session
+     */
+    async cleanup() {
+        if (this.useIndexedDB) {
+            await this.storage.deleteSession(this.sessionId);
+        }
+
+        this.chunks.clear();
+        this.memoryUsage = 0;
+        this.receivedCount = 0;
+        this.sessionId = null;
+    }
+}
+```
+
+### 3.3 Camera Service
+
+```javascript
+/**
+ * Camera Service
+ *
+ * Cross-platform camera access with adaptive constraints
+ *
+ * Handles:
+ * - Platform-specific camera preferences (iOS rear camera)
+ * - Permission management
+ * - Stream configuration
+ * - Error recovery
+ * - Camera switching
+ */
+
+class CameraService {
+    constructor(config) {
+        this.config = config;
+        this.stream = null;
+        this.currentCamera = null;
+        this.availableCameras = [];
+        this.platform = this.detectPlatform();
+    }
+
+    /**
+     * Detect platform
+     */
+    detectPlatform() {
+        const ua = navigator.userAgent.toLowerCase();
+        if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+        if (/android/.test(ua)) return 'android';
+        return 'desktop';
+    }
+
+    /**
+     * Get platform-specific camera constraints
+     */
+    getCameraConstraints() {
+        const baseConstraints = {
+            video: {
+                facingMode: this.platform === 'desktop' ? 'user' : { ideal: 'environment' },
+                width: { ideal: 1920, max: 2560 },
+                height: { ideal: 1080, max: 1440 },
+                frameRate: { ideal: 30, max: 60 }
+            },
+            audio: false
+        };
+
+        // iOS-specific
+        if (this.platform === 'ios') {
+            baseConstraints.video.facingMode = { exact: 'environment' };
+        }
+
+        return baseConstraints;
+    }
+
+    /**
+     * Request camera access
+     */
+    async requestCamera() {
+        try {
+            const constraints = this.getCameraConstraints();
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+            // Get available cameras
+            await this.enumerateCameras();
+
+            this.emit('camera-ready', { stream: this.stream });
+            return this.stream;
+
+        } catch (error) {
+            this.handleCameraError(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Enumerate available cameras
+     */
+    async enumerateCameras() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        this.availableCameras = devices.filter(d => d.kind === 'videoinput');
+        return this.availableCameras;
+    }
+
+    /**
+     * Switch camera
+     */
+    async switchCamera() {
+        if (this.availableCameras.length < 2) {
+            throw new Error('No alternative camera available');
+        }
+
+        // Find next camera
+        const currentIndex = this.availableCameras.findIndex(
+            c => c.deviceId === this.currentCamera
+        );
+        const nextIndex = (currentIndex + 1) % this.availableCameras.length;
+        const nextCamera = this.availableCameras[nextIndex];
+
+        // Stop current stream
+        this.stopCamera();
+
+        // Start new stream
+        const constraints = {
+            video: { deviceId: { exact: nextCamera.deviceId } },
+            audio: false
+        };
+
+        this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+        this.currentCamera = nextCamera.deviceId;
+
+        this.emit('camera-switched', { camera: nextCamera });
+        return this.stream;
+    }
+
+    /**
+     * Stop camera stream
+     */
+    stopCamera() {
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+        }
+        this.emit('camera-stopped');
+    }
+
+    /**
+     * Handle camera errors
+     */
+    handleCameraError(error) {
+        let message = 'Camera access failed';
+
+        if (error.name === 'NotAllowedError') {
+            message = 'Camera permission denied';
+        } else if (error.name === 'NotFoundError') {
+            message = 'No camera found';
+        } else if (error.name === 'NotReadableError') {
+            message = 'Camera already in use';
+        }
+
+        this.emit('camera-error', { error, message });
+    }
+}
+```
+
+### 3.4 Protocol Parser
+
+```javascript
+/**
+ * Protocol Parser
+ *
+ * Multi-protocol parsing with automatic version detection
+ *
+ * Supported protocols:
+ * - v1: Simple JSON format
+ * - v2: Extended format with compression
+ * - v3: Enterprise format with encryption, error correction
+ */
+
+class ProtocolParser {
+    constructor() {
+        this.parsers = {
+            '1.0': new ProtocolV1Parser(),
+            '2.0': new ProtocolV2Parser(),
+            '3.0': new ProtocolV3Parser()
+        };
+    }
+
+    /**
+     * Auto-detect protocol version
+     */
+    detectProtocol(data) {
+        try {
+            // Try JSON parse
+            const json = JSON.parse(data);
+
+            if (json.v) {
+                return json.v; // Protocol version in 'v' field
+            }
+
+            // Legacy detection
+            if (json.qrfile === 'v1') return '1.0';
+            if (json.qrfile === 'v2') return '2.0';
+
+        } catch (e) {
+            // Not JSON, might be simple base64
+            return 'simple';
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse QR data
+     */
+    async parse(data) {
+        const version = this.detectProtocol(data);
+
+        if (!version) {
+            throw new Error('Unknown protocol version');
+        }
+
+        const parser = this.parsers[version];
+        if (!parser) {
+            throw new Error(`Unsupported protocol version: ${version}`);
+        }
+
+        return await parser.parse(data);
+    }
+}
+
+/**
+ * Protocol V3 Parser
+ */
+class ProtocolV3Parser {
+    async parse(data) {
+        const payload = JSON.parse(data);
+
+        // Validate structure
+        this.validate(payload);
+
+        // Decode data
+        const chunkData = this.base64ToBytes(payload.data);
+
+        // Verify hash
+        const computedHash = await this.computeHash(chunkData);
+        if (computedHash !== payload.hash) {
+            throw new Error('Chunk hash verification failed');
+        }
+
+        // Handle error correction if present
+        let finalData = chunkData;
+        if (payload.ec) {
+            finalData = await this.applyErrorCorrection(chunkData, payload.ec);
+        }
+
+        return {
+            sessionId: payload.sid,
+            index: payload.idx,
+            total: payload.total,
+            data: finalData,
+            hash: payload.hash,
+            metadata: payload.meta
+        };
+    }
+
+    validate(payload) {
+        const required = ['v', 'sid', 'idx', 'total', 'data', 'hash', 'meta'];
+
+        for (const field of required) {
+            if (!(field in payload)) {
+                throw new Error(`Missing required field: ${field}`);
+            }
+        }
+
+        if (payload.v !== '3.0') {
+            throw new Error(`Invalid protocol version: ${payload.v}`);
+        }
+    }
+
+    base64ToBytes(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    async computeHash(data) {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async applyErrorCorrection(data, ecData) {
+        // Reed-Solomon error correction
+        // Implementation would use a Reed-Solomon library
+        return data; // Simplified for documentation
+    }
+}
+```
+
+---
+
+## 4. Progressive Web App Features
+
+### 4.1 Service Worker
+```javascript
+// sw.js - Service Worker for offline support
+
+const CACHE_VERSION = 'v3.0.0';
+const CACHE_NAME = `qr-scanner-${CACHE_VERSION}`;
+
+const STATIC_ASSETS = [
+    './',
+    './index.html',
+    './css/styles.css',
+    './js/app.js',
+    './js/camera-service.js',
+    './js/qr-scanner-engine.js',
+    // ... other static assets
+];
+
+// Install event - cache static assets
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(STATIC_ASSETS))
+            .then(() => self.skipWaiting())
+    );
+});
+
+// Activate event - cleanup old caches
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys()
+            .then(cacheNames => {
+                return Promise.all(
+                    cacheNames
+                        .filter(name => name !== CACHE_NAME)
+                        .map(name => caches.delete(name))
+                );
+            })
+            .then(() => self.clients.claim())
+    );
+});
+
+// Fetch event - serve from cache, fallback to network
+self.addEventListener('fetch', event => {
+    event.respondWith(
+        caches.match(event.request)
+            .then(response => response || fetch(event.request))
+            .catch(() => caches.match('./offline.html'))
+    );
+});
+```
+
+### 4.2 Web App Manifest
+```json
+{
+    "name": "QR File Scanner - Enterprise",
+    "short_name": "QR Scanner",
+    "description": "Enterprise-grade QR code scanner for secure file transfers",
+    "version": "3.0.0",
+    "start_url": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "theme_color": "#007AFF",
+    "background_color": "#000000",
+    "icons": [
+        {
+            "src": "icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ],
+    "categories": ["utilities", "productivity", "security"],
+    "permissions": ["camera", "persistent-storage"],
+    "features": ["cross-origin-isolated"]
+}
+```
+
+---
+
+## 5. State Management
+
+### 5.1 Application State Machine
+```javascript
+/**
+ * Transfer State Machine
+ *
+ * States:
+ * - IDLE: Not scanning
+ * - INITIALIZING: Setting up camera
+ * - SCANNING: Actively scanning QR codes
+ * - ASSEMBLING: Received all chunks, assembling file
+ * - COMPLETE: Transfer complete, file ready
+ * - ERROR: Error occurred
+ */
+
+class TransferStateMachine {
+    constructor() {
+        this.state = 'IDLE';
+        this.transitions = {
+            IDLE: ['INITIALIZING'],
+            INITIALIZING: ['SCANNING', 'ERROR'],
+            SCANNING: ['ASSEMBLING', 'ERROR', 'IDLE'],
+            ASSEMBLING: ['COMPLETE', 'ERROR'],
+            COMPLETE: ['IDLE'],
+            ERROR: ['IDLE']
+        };
+    }
+
+    transition(newState) {
+        if (!this.canTransition(newState)) {
+            throw new Error(`Invalid transition: ${this.state} -> ${newState}`);
+        }
+
+        const oldState = this.state;
+        this.state = newState;
+
+        this.emit('state-changed', { from: oldState, to: newState });
+    }
+
+    canTransition(newState) {
+        const allowedTransitions = this.transitions[this.state];
+        return allowedTransitions && allowedTransitions.includes(newState);
+    }
+
+    is(state) {
+        return this.state === state;
+    }
+}
+```
+
+---
+
+## 6. Performance Optimizations
+
+### 6.1 Memory Management
+- **Adaptive Storage**: Auto-switch between RAM and IndexedDB
+- **Chunk Cleanup**: Remove chunks after assembly
+- **Memory Monitoring**: Track and limit memory usage
+- **Garbage Collection**: Explicit cleanup of large objects
+
+### 6.2 Rendering Performance
+- **Virtual Scrolling**: For large chunk lists
+- **RequestAnimationFrame**: Smooth UI updates
+- **Debouncing**: Limit UI update frequency
+- **Web Workers**: Offload processing from main thread
+
+### 6.3 Scanning Performance
+- **Adaptive Scan Rate**: Adjust based on device capabilities
+- **Frame Skipping**: Scan every N frames
+- **Video Downsampling**: Process lower resolution
+- **Deduplication**: Avoid processing same QR twice
+
+---
+
+## 7. Cross-Platform Considerations
+
+### 7.1 iOS Safari
+- **Camera**: Use rear camera by default (`facingMode: environment`)
+- **Video**: Require `playsinline` attribute
+- **Status Bar**: Handle safe area insets
+- **Permissions**: Request camera permission on user gesture
+
+### 7.2 Android Chrome
+- **Camera**: Flexible facingMode fallback
+- **Permissions**: Handle permission denial gracefully
+- **Memory**: More conservative memory limits
+- **Fullscreen**: Handle fullscreen API differences
+
+### 7.3 Desktop Browsers
+- **Camera**: Prefer user-facing camera
+- **Keyboard**: Full keyboard navigation support
+- **Mouse**: Hover states and tooltips
+- **Screen Size**: Responsive layout for large screens
+
+---
+
+## 8. Security Architecture
+
+### 8.1 Zero-Trust Principles
+- **No Server Required**: 100% client-side processing
+- **No Persistence**: Optional secure storage only
+- **No External APIs**: All operations local
+- **Content Security Policy**: Strict CSP headers
+
+### 8.2 Data Protection
+- **Encryption**: AES-256-GCM for sensitive data
+- **Hashing**: SHA-256 for integrity verification
+- **Memory Clearing**: Explicit cleanup of sensitive data
+- **Secure Defaults**: Security features enabled by default
+
+---
+
+## 9. Technology Stack
+
+### 9.1 Core Technologies
+- **Language**: JavaScript (ES2020+), no transpilation
+- **QR Library**: qr-scanner (Nimiq, WebAssembly)
+- **Compression**: pako (zlib), fflate (faster alternative)
+- **Crypto**: Web Crypto API (native)
+- **Storage**: IndexedDB API (native)
+
+### 9.2 UI Framework
+- **Vanilla JavaScript**: No framework dependencies
+- **CSS3**: Modern CSS features (Grid, Flexbox, Variables)
+- **HTML5**: Semantic HTML5
+- **PWA**: Service Worker, Web App Manifest
+
+### 9.3 Development Tools
+- **Testing**: Playwright (E2E), Vitest (unit)
+- **Linting**: ESLint
+- **Formatting**: Prettier
+- **Build**: Vite (development server)
+- **Documentation**: JSDoc
+
+---
+
+**Document Version**: 1.0.0
+**Last Updated**: 2025-11-13
+**Status**: Ready for Implementation
