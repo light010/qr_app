@@ -135,21 +135,29 @@ JSON with complete metadata:
 **OPTIMIZED**: Binary format, no JSON overhead
 
 ```
-[sid:16bytes][idx:4bytes][data:variable][hash:32bytes]
+[sid:16bytes][idx:4bytes][total:4bytes][data:variable][hash:32bytes]
 ```
 
 **Structure:**
 - Bytes 0-15: Session ID (UUID binary, 16 bytes)
 - Bytes 16-19: Chunk index (uint32 big-endian, 4 bytes)
-- Bytes 20-N: Raw binary chunk data (NOT base64)
+- **Bytes 20-23: Total chunks (uint32 big-endian, 4 bytes)** ⭐ CRITICAL for air-gap!
+- Bytes 24-N: Raw binary chunk data (NOT base64)
 - Bytes N+1 to end: SHA-256 hash (32 bytes)
 
 **QR Encoding**: Binary mode (NOT alphanumeric or text)
 
+**Why include `total` in EVERY QR?**
+- ✅ **Air-gap robustness**: Scanner can determine completion from ANY QR
+- ✅ **Out-of-order scanning**: QRs can be scanned in any sequence
+- ✅ **Missing header resilience**: Even if idx=0 is damaged, scanner knows total
+- ✅ **Progress tracking**: Scanner shows "45/100 chunks" immediately
+- Cost: Only 4 bytes per chunk (~0.2% overhead for 1381 chunks)
+
 **Why binary?**
 - JSON + base64 for 2KB data = ~3.4KB QR code
-- Binary format for 2KB data = ~2.05KB QR code
-- **40% reduction in data size!**
+- Binary format for 2KB data = ~2.09KB QR code
+- **38% reduction in data size!**
 
 ### Field Specifications
 
@@ -226,16 +234,16 @@ JSON with complete metadata:
 
 ```python
 # For Format B (Binary Data QRs - idx >= 1)
-OVERHEAD = 16 (sid) + 4 (idx) + 32 (hash) = 52 bytes
+OVERHEAD = 16 (sid) + 4 (idx) + 4 (total) + 32 (hash) = 56 bytes
 
 # QR-40M capacity
 QR_40M_CAPACITY = 2331 bytes
 
 # Optimal chunk size
-CHUNK_SIZE = QR_40M_CAPACITY - OVERHEAD = 2279 bytes
+CHUNK_SIZE = QR_40M_CAPACITY - OVERHEAD = 2275 bytes  # Exact fit for air-gap protocol
 
-# Round down for safety
-OPTIMAL_CHUNK_SIZE = 2280 bytes  # Perfect fit!
+# Recommended (round down slightly for encoding safety margin)
+RECOMMENDED_CHUNK_SIZE = 2272 bytes  # Safe margin for binary encoding
 ```
 
 #### Number of QR Codes Calculation

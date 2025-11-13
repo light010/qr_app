@@ -676,38 +676,82 @@ class ProtocolV3:
 
     VERSION = "3.0"
 
-    def encode(self, chunk: ChunkModel, file_metadata: FileMetadata) -> str:
+    def encode(self, chunk: ChunkModel, file_metadata: FileMetadata) -> bytes:
         """
         Encode chunk into protocol format
 
-        Returns: JSON string
+        TWO FORMATS FOR OPTIMIZATION:
+        - Format A (idx=0): JSON with metadata (header QR)
+        - Format B (idx>=1): Binary format (data QRs) - 38% space savings!
+
+        Returns: bytes (JSON bytes for idx=0, binary for idx>=1)
         """
-        payload = {
-            "v": self.VERSION,
-            "sid": chunk.session_id,
-            "idx": chunk.index,
-            "total": chunk.total_chunks,
-            "data": base64.b64encode(chunk.data).decode('utf-8'),
-            "hash": chunk.hash,
-            "meta": {
-                "filename": file_metadata.filename,
-                "size": file_metadata.size,
-                "compression": file_metadata.compression_algorithm,
-                "encryption": "aes256gcm" if file_metadata.encryption_enabled else "none",
-                "checksum": file_metadata.file_hash,
-                "timestamp": datetime.utcnow().isoformat(),
-                "mime_type": file_metadata.mime_type
-            }
-        }
-
-        # Add error correction if present
-        if chunk.error_correction_data:
-            payload["ec"] = {
-                "type": "reed-solomon",
-                "data": base64.b64encode(chunk.error_correction_data).decode('utf-8')
+        if chunk.index == 0:
+            # Format A: Header QR with metadata (JSON)
+            payload = {
+                "v": self.VERSION,
+                "sid": chunk.session_id,
+                "idx": chunk.index,
+                "total": chunk.total_chunks,
+                "data": base64.b64encode(chunk.data).decode('utf-8'),
+                "hash": chunk.hash,
+                "meta": {
+                    "filename": file_metadata.filename,
+                    "size": file_metadata.size,
+                    "compression": file_metadata.compression_algorithm,
+                    "encryption": "aes256gcm" if file_metadata.encryption_enabled else "none",
+                    "checksum": file_metadata.file_hash,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "mime_type": file_metadata.mime_type
+                }
             }
 
-        return json.dumps(payload, separators=(',', ':'))
+            # Add error correction if present
+            if chunk.error_correction_data:
+                payload["ec"] = {
+                    "type": "reed-solomon",
+                    "data": base64.b64encode(chunk.error_correction_data).decode('utf-8')
+                }
+
+            return json.dumps(payload, separators=(',', ':')).encode('utf-8')
+
+        else:
+            # Format B: Binary data QR (OPTIMIZED - no JSON overhead)
+            # Structure: [sid:16][idx:4][total:4][data:N][hash:32]
+            return self.encode_binary(chunk)
+
+    def encode_binary(self, chunk: ChunkModel) -> bytes:
+        """
+        Encode chunk in binary format (Format B)
+
+        AIR-GAP CRITICAL: Includes `total` field so scanner can determine
+        completion from ANY QR code, not just the header.
+
+        Binary Structure (56 bytes overhead + data):
+        - Bytes 0-15: Session ID (UUID binary, 16 bytes)
+        - Bytes 16-19: Chunk index (uint32 big-endian, 4 bytes)
+        - Bytes 20-23: Total chunks (uint32 big-endian, 4 bytes) ⭐ CRITICAL!
+        - Bytes 24-N: Raw binary chunk data (NOT base64)
+        - Bytes N+1 to end: SHA-256 hash (32 bytes)
+
+        Returns: bytes
+        """
+        import struct
+
+        # Convert session ID (UUID string) to 16 bytes
+        sid_bytes = uuid.UUID(chunk.session_id).bytes
+
+        # Pack index and total as big-endian uint32 (4 bytes each)
+        idx_bytes = struct.pack('>I', chunk.index)  # >I = big-endian unsigned int
+        total_bytes = struct.pack('>I', chunk.total_chunks)
+
+        # Hash as bytes (convert hex string to bytes)
+        hash_bytes = bytes.fromhex(chunk.hash)
+
+        # Concatenate: sid + idx + total + data + hash
+        binary_qr = sid_bytes + idx_bytes + total_bytes + chunk.data + hash_bytes
+
+        return binary_qr
 
     def decode(self, data: str) -> Dict[str, Any]:
         """Decode protocol data"""
@@ -796,7 +840,7 @@ class ProtocolV3:
 - `none`: No encryption
 
 **QR Code Optimization:**
-- Chunk size: **2280 bytes** (optimized for QR-40M binary mode)
+- Chunk size: **2272 bytes** (optimized for QR-40M binary mode with total field)
 - QR Version: **40-M** (2331 byte capacity, 15% error correction)
 - Encoding: **Binary mode** for data chunks (not base64 except header)
 - Result: **50-70% fewer QR codes** vs naive implementation
@@ -831,7 +875,7 @@ def cli():
 @click.option('--compression-level', type=int, default=22, help='Compression level (zstd: 1-22, brotli: 0-11)')
 @click.option('--encrypt', '-e', is_flag=True, help='Enable encryption')
 @click.option('--password', '-p', type=str, help='Encryption password')
-@click.option('--chunk-size', type=int, default=2280, help='Chunk size in bytes (default: 2280 optimized for QR-40M)')
+@click.option('--chunk-size', type=int, default=2272, help='Chunk size in bytes (default: 2272 optimized for QR-40M)')
 @click.option('--fps', type=float, default=2.0, help='Display frames per second')
 @click.option('--output', '-o', type=click.Path(), help='Save QR codes to directory')
 def generate(file_path, compression, compression_level, encrypt, password, chunk_size, fps, output):

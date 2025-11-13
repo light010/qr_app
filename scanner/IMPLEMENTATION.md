@@ -303,12 +303,16 @@ export class ProtocolV3Parser {
     /**
      * Parse Binary QR (Format B: Data chunks, idx >= 1)
      *
-     * OPTIMIZED: Binary format saves 40% space vs JSON+base64
+     * OPTIMIZED: Binary format saves 38% space vs JSON+base64
+     *
+     * AIR-GAP ROBUSTNESS: Includes `total` field so scanner can determine
+     * completion from ANY QR code, even if header (idx=0) is damaged or missed.
      *
      * Structure:
      * [0-15]: Session ID (UUID binary, 16 bytes)
      * [16-19]: Chunk index (uint32 big-endian, 4 bytes)
-     * [20-N]: Raw binary chunk data
+     * [20-23]: Total chunks (uint32 big-endian, 4 bytes) ⭐ CRITICAL!
+     * [24-N]: Raw binary chunk data
      * [N+1 to end]: SHA-256 hash (32 bytes)
      */
     parseBinaryQR(binaryData) {
@@ -316,7 +320,7 @@ export class ProtocolV3Parser {
         const bytes = binaryData instanceof Uint8Array ? binaryData : new Uint8Array(binaryData);
 
         // Validate minimum size
-        if (bytes.length < 52) {  // 16 + 4 + 32 = minimum
+        if (bytes.length < 56) {  // 16 + 4 + 4 + 32 = minimum
             throw new Error('Invalid binary QR: too short');
         }
 
@@ -327,9 +331,12 @@ export class ProtocolV3Parser {
         // Extract chunk index (bytes 16-19, big-endian uint32)
         const idx = new DataView(bytes.buffer, 16, 4).getUint32(0, false); // false = big-endian
 
-        // Extract data (bytes 20 to end-32)
+        // Extract total chunks (bytes 20-23, big-endian uint32)
+        const total = new DataView(bytes.buffer, 20, 4).getUint32(0, false); // AIR-GAP CRITICAL!
+
+        // Extract data (bytes 24 to end-32)
         const dataEnd = bytes.length - 32;
-        const data = bytes.slice(20, dataEnd);
+        const data = bytes.slice(24, dataEnd);
 
         // Extract hash (last 32 bytes)
         const hashBytes = bytes.slice(dataEnd);
@@ -345,10 +352,10 @@ export class ProtocolV3Parser {
             version: "3.0",
             sessionId: sessionId,
             index: idx,
-            totalChunks: null, // Not in binary format, get from header
+            totalChunks: total,  // ✅ Available from EVERY QR for air-gap robustness
             data: data,
             hash: hash,
-            metadata: null // Get from session header
+            metadata: null // Get from session header (idx=0)
         };
     }
 
@@ -365,12 +372,240 @@ export class ProtocolV3Parser {
 
 **COMPATIBILITY WITH GENERATOR:**
 - ✅ Header QR (idx=0): JSON with metadata
-- ✅ Data QRs (idx>=1): Binary format [sid:16][idx:4][data][hash:32]
+- ✅ Data QRs (idx>=1): Binary format [sid:16][idx:4][total:4][data][hash:32]
 - ✅ Same compression algorithms (brotli, zstd-22, lz4, none)
 - ✅ Same encryption (aes256gcm, none)
 - ✅ Same hash algorithm (SHA-256)
-- ✅ Optimized chunk size (2280 bytes for QR-40M)
+- ✅ Optimized chunk size (2272 bytes for QR-40M with total field)
 - ✅ **50-70% fewer QR codes** vs naive implementation
+
+---
+
+### 2.1.1 Air-Gap Assembly Completion Logic
+
+**⚠️ CRITICAL FOR MILITARY-GRADE AIR-GAPPED SYSTEMS**
+
+In a true air-gapped environment, there is **NO communication** between generator and scanner. The scanner must autonomously determine when it has collected all chunks.
+
+#### How Scanner Knows Assembly is Complete
+
+```javascript
+/**
+ * Chunk Assembly Manager
+ *
+ * Manages chunk collection and determines completion autonomously
+ * without any communication with generator.
+ */
+export class ChunkAssemblyManager {
+    constructor() {
+        // Session tracking: sessionId → SessionData
+        this.sessions = new Map();
+    }
+
+    /**
+     * Add received chunk to session
+     *
+     * Returns: {
+     *   complete: boolean,      // True if all chunks received
+     *   progress: number,        // 0.0 to 1.0
+     *   received: number,        // Chunks received
+     *   total: number,           // Total chunks
+     *   missing: number[]        // Array of missing chunk indices
+     * }
+     */
+    addChunk(parsedQR) {
+        const { sessionId, index, totalChunks, data, metadata } = parsedQR;
+
+        // Get or create session
+        let session = this.sessions.get(sessionId);
+        if (!session) {
+            session = {
+                sessionId: sessionId,
+                total: totalChunks,  // Known from FIRST QR received!
+                chunks: new Map(),   // index → {data, hash, timestamp}
+                metadata: null,
+                startTime: Date.now()
+            };
+            this.sessions.set(sessionId, session);
+        }
+
+        // Update total if not set (for idx=0 JSON QRs)
+        if (!session.total && totalChunks) {
+            session.total = totalChunks;
+        }
+
+        // Store metadata from header QR (idx=0)
+        if (index === 0 && metadata) {
+            session.metadata = metadata;
+        }
+
+        // DEDUPLICATION: Check if chunk already received
+        if (session.chunks.has(index)) {
+            console.log(`Chunk ${index} already received (duplicate), skipping`);
+            return this.getSessionStatus(session);
+        }
+
+        // Store chunk
+        session.chunks.set(index, {
+            data: data,
+            hash: parsedQR.hash,
+            receivedAt: Date.now()
+        });
+
+        // Check completion
+        const status = this.getSessionStatus(session);
+
+        if (status.complete) {
+            console.log(`✅ Session ${sessionId} COMPLETE! All ${status.total} chunks received.`);
+            // Trigger file assembly
+            this.assembleFile(session);
+        }
+
+        return status;
+    }
+
+    /**
+     * Get session status
+     *
+     * COMPLETION CRITERIA:
+     * 1. Total chunks known (from ANY received QR)
+     * 2. Number of chunks == total
+     * 3. All indices from 0 to total-1 present (no gaps!)
+     */
+    getSessionStatus(session) {
+        if (!session.total) {
+            // Total not yet known (shouldn't happen with new protocol)
+            return {
+                complete: false,
+                progress: 0,
+                received: session.chunks.size,
+                total: null,
+                missing: []
+            };
+        }
+
+        const received = session.chunks.size;
+        const total = session.total;
+
+        // Check for missing chunks
+        const missing = [];
+        for (let i = 0; i < total; i++) {
+            if (!session.chunks.has(i)) {
+                missing.push(i);
+            }
+        }
+
+        // Complete if: received == total AND no missing chunks
+        const complete = (received === total) && (missing.length === 0);
+
+        return {
+            complete: complete,
+            progress: total > 0 ? received / total : 0,
+            received: received,
+            total: total,
+            missing: missing
+        };
+    }
+
+    /**
+     * Get missing chunks for display
+     *
+     * User can rescan these specific QR codes
+     */
+    getMissingChunks(sessionId) {
+        const session = this.sessions.get(sessionId);
+        if (!session) return [];
+
+        return this.getSessionStatus(session).missing;
+    }
+
+    /**
+     * Assemble file from chunks
+     */
+    async assembleFile(session) {
+        // Sort chunks by index (0, 1, 2, ..., total-1)
+        const sortedIndices = Array.from(session.chunks.keys()).sort((a, b) => a - b);
+
+        // Concatenate chunk data
+        const chunks = sortedIndices.map(idx => session.chunks.get(idx).data);
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+
+        const assembledData = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+            assembledData.set(chunk, offset);
+            offset += chunk.length;
+        }
+
+        // Pass to FileReconstructor for decompression/decryption
+        return {
+            data: assembledData,
+            metadata: session.metadata
+        };
+    }
+}
+```
+
+#### Key Features for Air-Gap Robustness
+
+1. **No Header Dependency**: `total` is in EVERY QR, so scanner knows total from first scanned QR (could be idx=45!)
+2. **Out-of-Order Scanning**: QRs can be scanned in any sequence (45, 12, 0, 99...)
+3. **Duplicate Detection**: Rescanning same QR is harmless (deduplication by index)
+4. **Missing Chunk Detection**: Scanner shows exactly which chunks are missing
+5. **Progress Tracking**: Real-time progress bar showing "45/100 chunks (45%)"
+6. **Gap Detection**: Ensures no missing indices (validates 0, 1, 2, ..., total-1 all present)
+7. **Autonomous Completion**: Scanner triggers assembly when `received == total AND no gaps`
+
+#### User Experience Flow
+
+```
+1. User starts scanning QR codes (in ANY order)
+
+2. Scanner receives QR #45 (binary data QR)
+   → Extracts: sessionId, idx=45, total=100, data
+   → Creates session, stores chunk
+   → Shows: "Received 1/100 chunks (1%)"
+
+3. Scanner receives QR #12
+   → Same sessionId, idx=12, total=100
+   → Stores chunk (deduplication check passes)
+   → Shows: "Received 2/100 chunks (2%)"
+
+4. Scanner receives QR #0 (header JSON QR)
+   → Same sessionId, idx=0, total=100, metadata
+   → Stores chunk + metadata
+   → Shows: "Received 3/100 chunks (3%)"
+   → Displays: Filename, size, compression, etc.
+
+5. User continues scanning...
+   → Progress bar updates in real-time
+   → Missing chunks shown: [1, 2, 3, 4, ..., 11, 13, ..., 44, 46, ...]
+
+6. Scanner receives QR #99 (last missing chunk)
+   → idx=99, total=100
+   → Checks: received=100, total=100, missing=[]
+   → ✅ COMPLETE!
+   → Automatically triggers assembly → decompress → decrypt → download
+
+7. File downloaded successfully!
+```
+
+#### Resilience Features
+
+**Problem**: Header QR (idx=0) damaged or missed
+**Solution**: Scanner still knows total from any other QR, can show missing chunks including idx=0
+
+**Problem**: QRs scanned out of order
+**Solution**: Session tracks chunks by index, order doesn't matter
+
+**Problem**: User accidentally rescans same QR multiple times
+**Solution**: Deduplication prevents duplicate storage, harmless
+
+**Problem**: User doesn't know which chunks are missing
+**Solution**: Scanner displays exact missing chunk numbers for targeted rescanning
+
+**Problem**: Network unavailable (air-gap)
+**Solution**: Everything is client-side, no communication needed!
 
 ---
 
