@@ -73,18 +73,7 @@ generator/
 │   │   │       ├── light.py
 │   │   │       └── dark.py
 │   │   │
-│   │   └── api/
-│   │       ├── __init__.py
-│   │       ├── app.py              # FastAPI app
-│   │       ├── routers/
-│   │       │   ├── __init__.py
-│   │       │   ├── generate.py
-│   │       │   └── session.py
-│   │       ├── schemas/
-│   │       │   ├── __init__.py
-│   │       │   └── request_models.py
-│   │       └── websocket/
-│   │           └── handler.py
+│   │   # API directory removed for air-gap compliance
 │   │
 │   ├── protocols/                  # Protocol implementations
 │   │   ├── __init__.py
@@ -143,9 +132,24 @@ generator/
 ├── .gitignore
 ├── pyproject.toml                  # Poetry config
 ├── requirements.txt                # Pip requirements
-├── README.md
-└── Dockerfile                      # Container config
+└── README.md
 ```
+
+**Note:** For air-gap deployment, remove `api/` directory, `Dockerfile`, and `docker-compose.yml`.
+
+### ⚠️ AIR-GAP DEPLOYMENT NOTE
+
+**For Military/Classified Environments:**
+
+**API and Docker sections have been REMOVED from this guide** as they violate air-gap requirements (REST API, WebSocket, network-based containers).
+
+**Air-gap compatible sections:**
+- Section 2: Core Implementation (Models, Services, Use Cases) ✅
+- Section 3: Protocol Implementation ✅
+- Section 4: CLI Implementation ✅
+- Section 5: Testing Strategy ✅
+
+**Deployment:** Use PyInstaller to create standalone executable. See `../ENTERPRISE_GUIDE.md` → AIR-GAP DEPLOYMENT for complete deployment procedures.
 
 ---
 
@@ -811,91 +815,9 @@ if __name__ == '__main__':
 
 ---
 
-## 5. API Implementation
+## 5. Testing Strategy
 
-### 5.1 FastAPI Application
-```python
-# src/interfaces/api/app.py
-from fastapi import FastAPI, UploadFile, File, WebSocket, HTTPException
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import Optional
-import asyncio
-
-app = FastAPI(
-    title="QR Generator API",
-    description="Enterprise QR code generation service",
-    version="3.0.0"
-)
-
-class GenerateRequest(BaseModel):
-    compression: str = 'zstd'
-    encryption_enabled: bool = False
-    password: Optional[str] = None
-    chunk_size: Optional[int] = None
-    protocol_version: str = '3.0'
-
-@app.post("/api/v1/generate")
-async def generate_qr_codes(
-    file: UploadFile = File(...),
-    request: GenerateRequest = None
-):
-    """Generate QR codes from uploaded file"""
-
-    # Save uploaded file
-    file_path = await save_upload(file)
-
-    # Execute use case
-    use_case = GenerateQRCodesUseCase(...)
-    response = await use_case.execute(GenerateQRCodesRequest(
-        file_path=file_path,
-        compression_algorithm=request.compression,
-        encryption_password=request.password,
-        protocol_version=request.protocol_version
-    ))
-
-    return {
-        "session_id": response.session_id,
-        "total_chunks": response.total_chunks,
-        "metadata": response.file_metadata
-    }
-
-@app.websocket("/ws/display/{session_id}")
-async def websocket_display(websocket: WebSocket, session_id: str):
-    """WebSocket endpoint for real-time QR code display"""
-
-    await websocket.accept()
-
-    # Get session QR codes
-    qr_codes = get_session_qr_codes(session_id)
-
-    try:
-        for qr_code in qr_codes:
-            # Send QR code as base64
-            await websocket.send_json({
-                "index": qr_code.chunk_index,
-                "total": len(qr_codes),
-                "image": qr_code.to_base64(),
-                "timestamp": time.time()
-            })
-
-            # Wait for configured FPS
-            await asyncio.sleep(1.0 / fps)
-
-    except WebSocketDisconnect:
-        pass
-
-@app.get("/api/v1/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "version": "3.0.0"}
-```
-
----
-
-## 6. Testing Strategy
-
-### 6.1 Unit Tests Example
+### 5.1 Unit Tests Example
 ```python
 # tests/unit/test_compression_service.py
 import pytest
@@ -930,64 +852,6 @@ def test_select_best_algorithm(compression_service, sample_data):
     best = compression_service.select_best_algorithm(sample_data)
 
     assert best in ['brotli', 'zstd', 'lz4']
-```
-
----
-
-## 7. Deployment
-
-### 7.1 Docker Configuration
-```dockerfile
-# Dockerfile
-FROM python:3.10-slim
-
-WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application
-COPY src/ ./src/
-COPY config/ ./config/
-
-# Expose API port
-EXPOSE 8000
-
-# Run API server
-CMD ["uvicorn", "src.interfaces.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### 7.2 Docker Compose
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  qr-generator-api:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
-    volumes:
-      - ./config:/app/config:ro
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-
-  grafana:
-    image: grafana/grafana
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
 ```
 
 ---

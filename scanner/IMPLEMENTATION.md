@@ -90,6 +90,42 @@ scanner/
 └── README.md
 ```
 
+### ⚠️ AIR-GAP DEPLOYMENT NOTE
+
+**For Military/Classified Environments:**
+
+**CRITICAL CHANGES REQUIRED:**
+- ❌ **NO CDN**: The `qr-scanner` library MUST be bundled locally in `public/lib/` directory
+- ❌ **NO Web Hosting**: Deploy as single HTML file via USB/CD, not to web servers
+- ❌ **NO Service Worker Network Fallback**: Service worker must be offline-only
+
+**Required modifications:**
+```bash
+# 1. Download qr-scanner library locally (do ONCE on connected machine)
+mkdir -p public/lib/
+curl -o public/lib/qr-scanner.umd.min.js \
+  https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js
+
+# 2. Update all script tags in HTML files
+# Replace: <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/...">
+# With:    <script src="./lib/qr-scanner.umd.min.js">
+
+# 3. For maximum portability, create single-file version
+# Inline ALL CSS, JavaScript, and libraries into one HTML file
+
+# 4. Verification (MUST return nothing)
+grep -i "http://" public/*.html
+grep -i "cdn\." public/*.html
+```
+
+**Air-gap compatible implementation:**
+- ✅ All core implementations (Section 2) - fully client-side
+- ✅ Storage Service (Section 2.2) - uses IndexedDB (local)
+- ✅ UI Components (Section 2.4) - no network dependencies
+- ✅ Configuration System (Section 3) - adaptive, no external calls
+
+**Deployment:** See `../ENTERPRISE_GUIDE.md` → AIR-GAP DEPLOYMENT for complete procedures.
+
 ---
 
 ## 2. Core Implementation
