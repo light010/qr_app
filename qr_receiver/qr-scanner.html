@@ -28,7 +28,12 @@
     
     <!-- External Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
-    
+
+    <!-- Zstd Decompression Library (REQUIRED for Protocol V3) -->
+    <!-- AIR-GAP: Download locally: npm install fzstd && cp node_modules/fzstd/lib/index.js lib/fzstd.js -->
+    <!-- Then replace CDN URL with: <script src="lib/fzstd.js"></script> -->
+    <script src="https://unpkg.com/fzstd@0.1.1/lib/index.js"></script>
+
     <!-- Modular Styles -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
