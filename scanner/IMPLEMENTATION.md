@@ -99,14 +99,24 @@ scanner/
 
 **Required modifications:**
 ```bash
-# 1. Download qr-scanner library locally (do ONCE on connected machine)
+# 1. Download required libraries locally (do ONCE on connected machine)
 mkdir -p public/lib/
+
+# QR Scanner library
 curl -o public/lib/qr-scanner.umd.min.js \
   https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js
 
+# Zstd decompression library (CRITICAL - generator uses Zstd level 22 by default)
+npm install fzstd
+cp node_modules/fzstd/lib/index.js public/lib/fzstd.js
+# OR download directly:
+curl -o public/lib/fzstd.js \
+  https://unpkg.com/fzstd@0.1.1/lib/index.js
+
 # 2. Update all script tags in HTML files
-# Replace: <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/...">
-# With:    <script src="./lib/qr-scanner.umd.min.js">
+# Replace: <script src="https://cdn.jsdelivr.net/npm/...">
+# With:    <script src="./lib/[library-name].js">
+# CRITICAL: Include fzstd BEFORE data-processor.js
 
 # 3. For maximum portability, create single-file version
 # Inline ALL CSS, JavaScript, and libraries into one HTML file
@@ -114,6 +124,9 @@ curl -o public/lib/qr-scanner.umd.min.js \
 # 4. Verification (MUST return nothing)
 grep -i "http://" public/*.html
 grep -i "cdn\." public/*.html
+
+# 5. Test Zstd decompression locally
+# Ensure fzstd is loaded and data-processor can decompress generator output
 ```
 
 **Air-gap compatible implementation:**
@@ -955,9 +968,19 @@ export class FileReconstructor {
 
     /**
      * Decompress data
+     *
+     * IMPORTANT: MUST support all generator compression algorithms:
+     * - zstd (DEFAULT for generator) - CRITICAL!
+     * - brotli
+     * - lz4
+     * - none
      */
     async decompress(data, metadata) {
         const algorithm = metadata.compression;
+
+        if (algorithm === 'none') {
+            return data;
+        }
 
         const decompressed = await this.compressionService.decompress(
             data,

@@ -323,9 +323,10 @@ class BrotliCompression:
         return "brotli"
 
 class ZstdCompression:
-    """Zstandard compression implementation"""
+    """Zstandard compression implementation - OPTIMIZED for minimal QR codes"""
 
-    def __init__(self, level: int = 3):
+    def __init__(self, level: int = 22):
+        """Initialize with level 22 (maximum compression) for optimal QR count reduction"""
         self.level = level
 
     def compress(self, data: bytes) -> bytes:

@@ -5,11 +5,11 @@
 class DataProcessor {
     constructor() {
         this.supportedFormats = {
-            compression: ['gzip', 'deflate', 'brotli', 'lz4'],
+            compression: ['zstd', 'brotli', 'gzip', 'deflate', 'lz4'], // zstd is PRIMARY (generator default)
             encryption: ['aes-256-gcm', 'aes-256-cbc', 'chacha20-poly1305'],
             errorCorrection: ['rs-255-223', 'rs-255-239'] // Reed-Solomon variants
         };
-        
+
         this.cryptoSubtle = null;
         this.initializeCrypto();
     }
@@ -359,14 +359,16 @@ class DataProcessor {
      */
     async decompressData(compressedData, compressionParams) {
         const { algorithm, level } = this.parseCompressionParams(compressionParams);
-        
+
         switch (algorithm) {
+            case 'zstd':
+                return await this.decompressZstd(compressedData);
+            case 'brotli':
+                return await this.decompressBrotli(compressedData);
             case 'gzip':
                 return await this.decompressGzip(compressedData);
             case 'deflate':
                 return await this.decompressDeflate(compressedData);
-            case 'brotli':
-                return await this.decompressBrotli(compressedData);
             case 'lz4':
                 return await this.decompressLZ4(compressedData);
             default:
@@ -378,13 +380,42 @@ class DataProcessor {
         if (typeof params === 'string') {
             return { algorithm: params };
         }
-        
+
         return {
-            algorithm: params.algorithm || 'gzip',
-            level: params.level || 6
+            algorithm: params.algorithm || 'zstd', // Default to zstd to match generator
+            level: params.level || 22 // Default to zstd level 22
         };
     }
-    
+
+    /**
+     * Zstd Decompression (PRIMARY - matches generator default)
+     *
+     * IMPORTANT: Requires fzstd library for air-gapped deployment
+     * Bundle: qr_receiver/lib/fzstd.js (from https://www.npmjs.com/package/fzstd)
+     *
+     * For air-gapped deployment:
+     * 1. Download fzstd library locally: npm install fzstd && cp node_modules/fzstd/lib/index.js qr_receiver/lib/fzstd.js
+     * 2. Include in qr-scanner.html: <script src="lib/fzstd.js"></script>
+     */
+    async decompressZstd(data) {
+        try {
+            // Check for fzstd library (should be bundled locally for air-gap)
+            if (typeof fzstd === 'undefined' && typeof window.fzstd === 'undefined') {
+                throw new Error('fzstd library not available. Required for Zstd decompression in air-gapped environment.');
+            }
+
+            const fzstdLib = window.fzstd || fzstd;
+
+            // Decompress using fzstd
+            const decompressed = fzstdLib.decompress(data);
+
+            return new Uint8Array(decompressed);
+
+        } catch (error) {
+            throw new Error(`Zstd decompression failed: ${error.message}`);
+        }
+    }
+
     async decompressGzip(data) {
         try {
             // Use native DecompressionStream if available
