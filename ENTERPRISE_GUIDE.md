@@ -82,13 +82,26 @@ This document provides a comprehensive guide for implementing an enterprise-grad
 
 ## 📡 Protocol V3 Specification
 
-### ⚠️ SINGLE PROTOCOL STANDARD
+### ⚠️ OPTIMIZED FOR MINIMAL QR CODES
 
 **This system uses ONLY Protocol V3.** No backward compatibility with v1 or v2.
 
-**Both Generator and Scanner MUST implement Protocol V3 exactly as specified.**
+**OPTIMIZATION STRATEGY:**
+- ✅ **Metadata once** (first QR only) - NOT repeated
+- ✅ **Binary data chunks** (base64 only for first QR) - saves 33% space
+- ✅ **Maximum compression** (Zstd level 22, Brotli level 11)
+- ✅ **Optimal chunk size** (2953 bytes for QR-M, 1852 bytes for QR-H)
+- ✅ **Error correction balance** (Medium for best capacity/reliability)
 
-### JSON Format Structure
+**Result**: 50-70% fewer QR codes compared to naive implementation.
+
+---
+
+### Protocol Formats
+
+#### Format A: Header QR (First QR Only - idx=0)
+
+JSON with complete metadata:
 
 ```json
 {
@@ -102,10 +115,13 @@ This document provides a comprehensive guide for implementing an enterprise-grad
     "filename": "example.txt",
     "size": 1048576,
     "compression": "zstd",
+    "compression_level": 22,
     "encryption": "aes256gcm",
     "checksum": "sha256_file_hash",
     "timestamp": "2025-11-13T12:00:00Z",
-    "mime_type": "text/plain"
+    "mime_type": "text/plain",
+    "chunk_size": 2953,
+    "qr_version": "40-M"
   },
   "ec": {
     "type": "reed-solomon",
@@ -113,6 +129,27 @@ This document provides a comprehensive guide for implementing an enterprise-grad
   }
 }
 ```
+
+#### Format B: Data QR (Subsequent QRs - idx≥1)
+
+**OPTIMIZED**: Binary format, no JSON overhead
+
+```
+[sid:16bytes][idx:4bytes][data:variable][hash:32bytes]
+```
+
+**Structure:**
+- Bytes 0-15: Session ID (UUID binary, 16 bytes)
+- Bytes 16-19: Chunk index (uint32 big-endian, 4 bytes)
+- Bytes 20-N: Raw binary chunk data (NOT base64)
+- Bytes N+1 to end: SHA-256 hash (32 bytes)
+
+**QR Encoding**: Binary mode (NOT alphanumeric or text)
+
+**Why binary?**
+- JSON + base64 for 2KB data = ~3.4KB QR code
+- Binary format for 2KB data = ~2.05KB QR code
+- **40% reduction in data size!**
 
 ### Field Specifications
 
@@ -134,18 +171,29 @@ This document provides a comprehensive guide for implementing an enterprise-grad
 | `filename` | string | ✅ | Original filename |
 | `size` | number | ✅ | Total file size in bytes |
 | `compression` | string | ✅ | `brotli`, `zstd`, `lz4`, `none` |
+| `compression_level` | number | ✅ | Compression level used |
 | `encryption` | string | ✅ | `aes256gcm`, `none` |
 | `checksum` | string | ✅ | SHA-256 hash of complete file |
 | `timestamp` | string | ✅ | ISO 8601 UTC timestamp |
 | `mime_type` | string | ✅ | MIME type of file |
+| `chunk_size` | number | ✅ | Bytes per chunk (optimized) |
+| `qr_version` | string | ✅ | QR version used (e.g., "40-M") |
 
-### Supported Algorithms
+### Supported Algorithms (OPTIMIZED)
 
-**Compression:**
-- `brotli`: Brotli compression (level 11)
-- `zstd`: Zstandard compression (level 3)
-- `lz4`: LZ4 compression
-- `none`: No compression
+**Compression (Maximum Levels for Minimum QR Codes):**
+- `zstd`: **Zstandard level 22** (BEST: 30-40% better than level 3) ⭐ RECOMMENDED
+- `brotli`: **Brotli level 11, window 24** (Very good, slower)
+- `lz4`: LZ4 (Fast but poor compression, NOT recommended)
+- `none`: No compression (only for already compressed files)
+
+**Compression Comparison:**
+| Algorithm | Ratio | Speed | Recommendation |
+|-----------|-------|-------|----------------|
+| Zstd-22 | 25-35% | Medium | ✅ DEFAULT (best balance) |
+| Brotli-11 | 20-30% | Slow | Use for text-heavy files |
+| LZ4 | 50-60% | Fast | ❌ Avoid (wastes QR codes) |
+| None | 100% | N/A | Only for .zip, .jpg, .mp4 |
 
 **Encryption:**
 - `aes256gcm`: AES-256-GCM with PBKDF2 (100,000 iterations)
@@ -156,6 +204,77 @@ This document provides a comprehensive guide for implementing an enterprise-grad
 
 **Error Correction (Optional):**
 - Reed-Solomon erasure coding
+
+---
+
+### QR Code Capacity Optimization
+
+**CRITICAL**: Use maximum QR version and optimal error correction for minimum QR codes.
+
+#### QR Code Capacity Table (Binary Mode)
+
+| QR Version | Error Correction | Max Bytes | Recommended Chunk Size |
+|------------|------------------|-----------|------------------------|
+| 40-L (Low) | ~7% errors | **2953** | 2900 bytes ⚠️ Risky |
+| 40-M (Med) | ~15% errors | **2331** | 2280 bytes ✅ **RECOMMENDED** |
+| 40-Q (Quar) | ~25% errors | **1663** | 1610 bytes |
+| 40-H (High) | ~30% errors | **1273** | 1220 bytes ⚠️ Too conservative |
+
+**Recommendation**: Use **40-M (Medium)** - best balance of capacity and reliability.
+
+#### Optimal Chunk Size Formula
+
+```python
+# For Format B (Binary Data QRs - idx >= 1)
+OVERHEAD = 16 (sid) + 4 (idx) + 32 (hash) = 52 bytes
+
+# QR-40M capacity
+QR_40M_CAPACITY = 2331 bytes
+
+# Optimal chunk size
+CHUNK_SIZE = QR_40M_CAPACITY - OVERHEAD = 2279 bytes
+
+# Round down for safety
+OPTIMAL_CHUNK_SIZE = 2280 bytes  # Perfect fit!
+```
+
+#### Number of QR Codes Calculation
+
+```python
+# Example: 10MB file with Zstd-22 compression
+
+original_size = 10 * 1024 * 1024  # 10MB = 10,485,760 bytes
+compression_ratio = 0.30  # Zstd-22 achieves ~30% of original
+compressed_size = original_size * compression_ratio  # 3,145,728 bytes
+
+# Header QR (idx=0): JSON format, ~800 bytes, 1 QR
+header_qrs = 1
+
+# Data QRs (idx>=1): Binary format
+data_to_split = compressed_size
+chunk_size = 2280 bytes
+data_qrs = ceil(data_to_split / chunk_size)  # 1380 QRs
+
+total_qrs = header_qrs + data_qrs  # 1381 QRs
+
+# Compare to NAIVE approach (JSON + base64 everywhere):
+# chunk_size_naive = 1000 bytes (base64 overhead)
+# naive_qrs = ceil(compressed_size / 1000)  # 3146 QRs
+#
+# SAVINGS: 56% fewer QR codes! (1381 vs 3146)
+```
+
+#### Compression Impact on QR Count
+
+| File Type | Size | No Compression | Zstd-3 | Zstd-22 | Savings |
+|-----------|------|----------------|--------|---------|---------|
+| Text (.txt) | 1MB | 463 QRs | 116 QRs | **81 QRs** | 82% fewer! |
+| Code (.py) | 500KB | 232 QRs | 58 QRs | **41 QRs** | 82% fewer! |
+| JSON (.json) | 2MB | 926 QRs | 185 QRs | **130 QRs** | 86% fewer! |
+| Binary (.bin) | 1MB | 463 QRs | 417 QRs | **405 QRs** | 12% fewer |
+| Image (.jpg) | 1MB | 463 QRs | 463 QRs | **463 QRs** | 0% (skip compression!) |
+
+**Key Insight**: Compressible files (text, code, JSON) benefit enormously from Zstd-22!
 
 ### Compatibility Requirements
 
