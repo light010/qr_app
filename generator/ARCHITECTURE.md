@@ -15,7 +15,7 @@ The QR Generator is an enterprise-grade application for encoding files, data, an
 ### 1.3 Key Requirements
 - Support multiple file formats and sizes (1KB - 100MB+)
 - Adaptive QR code generation (size, error correction, encoding)
-- Multiple protocol support (v1, v2, v3 with extensibility)
+- Protocol V3 standard (NO backward compatibility with v1/v2)
 - Cross-platform compatibility (Windows, macOS, Linux)
 - Both GUI and CLI interfaces
 - Streaming and batch modes
@@ -337,17 +337,13 @@ Depend on abstractions, not concretions:
 #### Factory Pattern
 ```python
 class ProtocolFactory:
-    """Creates protocol instances based on version"""
+    """Creates protocol instances - V3 ONLY"""
 
     @staticmethod
-    def create(version: str) -> Protocol:
-        if version == "1.0":
-            return ProtocolV1()
-        elif version == "2.0":
-            return ProtocolV2()
-        elif version == "3.0":
-            return ProtocolV3()
-        raise UnsupportedProtocolError(version)
+    def create(version: str = "3.0") -> Protocol:
+        if version != "3.0":
+            raise UnsupportedProtocolError(f"Only Protocol V3 supported, got: {version}")
+        return ProtocolV3()
 ```
 
 #### Strategy Pattern

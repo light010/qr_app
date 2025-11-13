@@ -48,7 +48,7 @@ grep -i "cdn\." public/*.html    # Must return NOTHING
 
 ### 1.3 Key Requirements
 - Real-time QR code detection (5-30 FPS based on device)
-- Multi-protocol support (v1, v2, v3 with extensibility)
+- Protocol V3 standard (NO backward compatibility with v1/v2)
 - Large file assembly (up to 100MB+ in chunks)
 - Offline-capable Progressive Web App
 - Cross-platform camera access
@@ -695,23 +695,22 @@ class CameraService {
 
 class ProtocolParser {
     constructor() {
-        this.parsers = {
-            '1.0': new ProtocolV1Parser(),
-            '2.0': new ProtocolV2Parser(),
-            '3.0': new ProtocolV3Parser()
-        };
+        this.parser = new ProtocolV3Parser(); // V3 ONLY
     }
 
     /**
-     * Auto-detect protocol version
+     * Validate Protocol V3
      */
     detectProtocol(data) {
         try {
             // Try JSON parse
             const json = JSON.parse(data);
 
-            if (json.v) {
-                return json.v; // Protocol version in 'v' field
+            if (json.v && json.v !== '3.0') {
+                throw new Error(`Unsupported protocol version: ${json.v}. Only V3 supported.`);
+            }
+
+            return json.v || '3.0'; // Protocol version in 'v' field
             }
 
             // Legacy detection

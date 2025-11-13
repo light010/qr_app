@@ -80,6 +80,109 @@ This document provides a comprehensive guide for implementing an enterprise-grad
 
 ---
 
+## 📡 Protocol V3 Specification
+
+### ⚠️ SINGLE PROTOCOL STANDARD
+
+**This system uses ONLY Protocol V3.** No backward compatibility with v1 or v2.
+
+**Both Generator and Scanner MUST implement Protocol V3 exactly as specified.**
+
+### JSON Format Structure
+
+```json
+{
+  "v": "3.0",
+  "sid": "uuid-v4-session-id",
+  "idx": 0,
+  "total": 100,
+  "data": "base64_encoded_chunk_data",
+  "hash": "sha256_chunk_hash",
+  "meta": {
+    "filename": "example.txt",
+    "size": 1048576,
+    "compression": "zstd",
+    "encryption": "aes256gcm",
+    "checksum": "sha256_file_hash",
+    "timestamp": "2025-11-13T12:00:00Z",
+    "mime_type": "text/plain"
+  },
+  "ec": {
+    "type": "reed-solomon",
+    "data": "base64_encoded_ec_data"
+  }
+}
+```
+
+### Field Specifications
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `v` | string | ✅ | Protocol version "3.0" |
+| `sid` | string | ✅ | UUID v4 session identifier |
+| `idx` | number | ✅ | Zero-based chunk index |
+| `total` | number | ✅ | Total number of chunks |
+| `data` | string | ✅ | Base64-encoded chunk data |
+| `hash` | string | ✅ | SHA-256 hash of chunk data |
+| `meta` | object | ✅ | File metadata (see below) |
+| `ec` | object | ❌ | Error correction data (optional) |
+
+### Metadata Fields
+
+| Field | Type | Required | Valid Values |
+|-------|------|----------|--------------|
+| `filename` | string | ✅ | Original filename |
+| `size` | number | ✅ | Total file size in bytes |
+| `compression` | string | ✅ | `brotli`, `zstd`, `lz4`, `none` |
+| `encryption` | string | ✅ | `aes256gcm`, `none` |
+| `checksum` | string | ✅ | SHA-256 hash of complete file |
+| `timestamp` | string | ✅ | ISO 8601 UTC timestamp |
+| `mime_type` | string | ✅ | MIME type of file |
+
+### Supported Algorithms
+
+**Compression:**
+- `brotli`: Brotli compression (level 11)
+- `zstd`: Zstandard compression (level 3)
+- `lz4`: LZ4 compression
+- `none`: No compression
+
+**Encryption:**
+- `aes256gcm`: AES-256-GCM with PBKDF2 (100,000 iterations)
+- `none`: No encryption
+
+**Hash:**
+- SHA-256 for all checksums and hashes
+
+**Error Correction (Optional):**
+- Reed-Solomon erasure coding
+
+### Compatibility Requirements
+
+**Generator MUST:**
+1. Always set `v` to "3.0"
+2. Generate UUID v4 for `sid`
+3. Base64-encode all binary data
+4. Calculate SHA-256 hashes correctly
+5. Include all required metadata fields
+6. Use ISO 8601 format for timestamps
+
+**Scanner MUST:**
+1. Reject any version other than "3.0"
+2. Validate all required fields present
+3. Verify chunk hashes match data
+4. Support all compression algorithms
+5. Support AES-256-GCM encryption
+6. Parse metadata correctly
+
+### Example Implementation
+
+See:
+- Generator: `generator/IMPLEMENTATION.md` Section 3
+- Scanner: `scanner/IMPLEMENTATION.md` Section 2.1
+
+---
+
 ## 🎯 Implementation Strategy
 
 ### Phase 1: Foundation (Weeks 1-2)

@@ -78,9 +78,7 @@ generator/
 │   ├── protocols/                  # Protocol implementations
 │   │   ├── __init__.py
 │   │   ├── base_protocol.py
-│   │   ├── protocol_v1.py
-│   │   ├── protocol_v2.py
-│   │   └── protocol_v3.py
+│   │   └── protocol_v3.py          # ONLY Protocol V3 - latest standard
 │   │
 │   ├── strategies/                 # Strategy implementations
 │   │   ├── __init__.py
@@ -643,7 +641,13 @@ class GenerateQRCodesUseCase:
 
 ## 3. Protocol Implementation
 
-### 3.1 Protocol V3 Implementation
+### ⚠️ PROTOCOL V3 - ONLY SUPPORTED VERSION
+
+**This system uses ONLY Protocol V3.** No backward compatibility with v1 or v2.
+
+**Generator and Scanner MUST both implement Protocol V3 exactly as specified below.**
+
+### 3.1 Protocol V3 Specification
 ```python
 # src/protocols/protocol_v3.py
 import json
@@ -655,15 +659,18 @@ import uuid
 
 class ProtocolV3:
     """
-    Protocol Version 3 - Enterprise Edition
+    Protocol Version 3 - Latest Standard (NO backward compatibility)
 
     Features:
     - Session management with UUIDs
     - Rich metadata
-    - Error correction support
-    - Encryption indicators
-    - Priority handling
+    - Error correction support (Reed-Solomon)
+    - Encryption (AES-256-GCM)
+    - Compression (brotli, zstd, lz4)
+    - SHA-256 checksums
     - Timestamp tracking
+
+    COMPATIBILITY: Scanner MUST implement exact same protocol
     """
 
     VERSION = "3.0"
@@ -726,6 +733,65 @@ class ProtocolV3:
         return True
 ```
 
+### 3.2 Protocol V3 Data Format
+
+**JSON Structure:**
+```json
+{
+  "v": "3.0",
+  "sid": "uuid-session-id",
+  "idx": 0,
+  "total": 100,
+  "data": "base64_encoded_chunk_data",
+  "hash": "sha256_chunk_hash",
+  "meta": {
+    "filename": "example.txt",
+    "size": 1048576,
+    "compression": "zstd",
+    "encryption": "aes256gcm",
+    "checksum": "sha256_file_hash",
+    "timestamp": "2025-11-13T12:00:00Z",
+    "mime_type": "text/plain"
+  },
+  "ec": {
+    "type": "reed-solomon",
+    "data": "base64_encoded_ec_data"
+  }
+}
+```
+
+**Field Specifications:**
+- `v`: Protocol version string "3.0" (REQUIRED)
+- `sid`: UUID v4 session identifier (REQUIRED)
+- `idx`: Zero-based chunk index (REQUIRED)
+- `total`: Total number of chunks (REQUIRED)
+- `data`: Base64-encoded chunk data (REQUIRED)
+- `hash`: SHA-256 hash of chunk data (REQUIRED)
+- `meta`: Metadata object (REQUIRED)
+  - `filename`: Original filename (REQUIRED)
+  - `size`: Total file size in bytes (REQUIRED)
+  - `compression`: "brotli", "zstd", "lz4", or "none" (REQUIRED)
+  - `encryption`: "aes256gcm" or "none" (REQUIRED)
+  - `checksum`: SHA-256 hash of complete file (REQUIRED)
+  - `timestamp`: ISO 8601 UTC timestamp (REQUIRED)
+  - `mime_type`: MIME type of file (REQUIRED)
+- `ec`: Error correction data (OPTIONAL)
+  - `type`: "reed-solomon" (REQUIRED if ec present)
+  - `data`: Base64-encoded EC data (REQUIRED if ec present)
+
+**Supported Compression Algorithms:**
+- `brotli`: Brotli compression (level 11)
+- `zstd`: Zstandard compression (level 3)
+- `lz4`: LZ4 compression
+- `none`: No compression
+
+**Supported Encryption:**
+- `aes256gcm`: AES-256-GCM with PBKDF2 key derivation
+- `none`: No encryption
+
+**SCANNER COMPATIBILITY:**
+Scanner MUST decode exact same format. No format translation or conversion.
+
 ---
 
 ## 4. CLI Implementation
@@ -754,9 +820,8 @@ def cli():
 @click.option('--password', '-p', type=str, help='Encryption password')
 @click.option('--chunk-size', type=int, help='Custom chunk size')
 @click.option('--fps', type=float, default=2.0, help='Display frames per second')
-@click.option('--protocol', type=click.Choice(['1.0', '2.0', '3.0']), default='3.0')
 @click.option('--output', '-o', type=click.Path(), help='Save QR codes to directory')
-def generate(file_path, compression, encrypt, password, chunk_size, fps, protocol, output):
+def generate(file_path, compression, encrypt, password, chunk_size, fps, output):
     """Generate QR codes from FILE_PATH"""
 
     console.print(f"[bold blue]QR Generator v3.0[/bold blue]")
@@ -792,7 +857,7 @@ def generate(file_path, compression, encrypt, password, chunk_size, fps, protoco
 
     table.add_row("Total Chunks", str(total_chunks))
     table.add_row("Compression", compression)
-    table.add_row("Protocol", protocol)
+    table.add_row("Protocol", "V3 (latest)")
     table.add_row("Estimated Time", f"{estimated_time:.1f}s")
 
     console.print(table)
