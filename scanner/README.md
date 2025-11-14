@@ -12,10 +12,11 @@ This is a **military-grade air-gapped system** with **NO fallback mechanism**. I
 
 ✅ **Protocol V3 ONLY**: Scanner decodes exact same format generator encodes
 ✅ **Binary Format**: Parses [sid:16][idx:4][total:4][data][hash:32]
-✅ **Compression**: Supports Zstd level 22 (generator default), Brotli, LZ4
+✅ **Compression**: Zstd level 22 ONLY (SIMPLIFIED - generator only uses this)
+✅ **Encryption**: AES-256-GCM ONLY (hardware accelerated, authenticated)
 ✅ **Chunk Size**: Handles 2272-byte chunks from QR-40M
 ✅ **Assembly**: Reconstructs from any QR scan order
-✅ **Metadata**: Extracts filename, size, mime type from header QR
+✅ **Metadata**: Extracts filename, size, compression=zstd, encryption=aes256gcm from header QR
 
 ### Verification Before Deployment
 
@@ -70,8 +71,8 @@ The QR Scanner is a client-side Progressive Web App that scans QR code sequences
 - ✅ **Large Files**: Support for 100MB+ files with chunked assembly
 - ✅ **Smart Storage**: Automatic RAM/IndexedDB selection
 - ✅ **File Preview**: 20+ file types supported
-- ✅ **Decompression**: Zstd (PRIMARY), Brotli, LZ4
-- ✅ **Decryption**: AES-256-GCM support
+- ✅ **Decompression**: Zstd level 22 ONLY (maximum compression)
+- ✅ **Decryption**: AES-256-GCM ONLY (hardware accelerated)
 - ✅ **Protocol Support**: Protocol V3 ONLY (NO backward compatibility)
 - ✅ **Generator Compatible**: 100% compatible with generator output
 

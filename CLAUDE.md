@@ -737,7 +737,8 @@ chunks.reset()                        // Reset chunks
 **Solution**:
 ```bash
 pip install segno pillow
-# Optional: brotli zstandard lz4 reedsolo cryptography
+# Required for compression: zstandard
+# Optional for encryption: cryptography
 ```
 
 **Documentation**: `qr_receiver/README.md` - Dependencies section
@@ -859,9 +860,9 @@ ANY deviation breaks compatibility!
 
 **3. Check compression algorithm support:**
 ```
-Generator defaults to: Zstd level 22
-Scanner MUST support: Zstd (PRIMARY), Brotli, LZ4
-NEVER remove compression algorithm support!
+Generator ALWAYS uses: Zstd level 22 ONLY (SIMPLIFIED for minimum QR codes)
+Scanner MUST support: Zstd level 22 ONLY
+NEVER remove Zstd decompression support - system will break!
 ```
 
 **4. Verify chunk assembly logic:**
@@ -883,13 +884,13 @@ const idx = new DataView(bytes.buffer, 16, 4);  // bytes 16-19
 const total = new DataView(bytes.buffer, 20, 4); // bytes 20-23
 ```
 
-❌ **Removing or modifying compression algorithm**
+❌ **Removing or modifying Zstd decompression**
 ```javascript
-// WRONG - generator might use Zstd!
+// WRONG - generator ALWAYS uses Zstd-22!
 case 'zstd':
     throw new Error('Not supported');
 
-// CORRECT - MUST support all generator algorithms
+// CORRECT - MUST support Zstd (generator ONLY uses this)
 case 'zstd':
     return await this.decompressZstd(compressedData);
 ```
@@ -920,13 +921,14 @@ const algorithm = metadata.compression;
 2. **Identify affected modules**: Protocol parser? Compression? Assembly?
 3. **Verify against generator spec**: Does binary format still match?
 4. **Check byte offsets**: Are they still exactly as generator encodes?
-5. **Confirm algorithm support**: Still supports Zstd-22, Brotli-11, LZ4?
+5. **Confirm algorithm support**: Still supports Zstd-22? (ONLY algorithm needed)
 
 **Include in commit message:**
 ```
 COMPATIBILITY VERIFIED:
 - Binary format: [sid:16][idx:4][total:4][data][hash:32] ✓
-- Compression: Zstd-22, Brotli-11, LZ4 all supported ✓
+- Compression: Zstd-22 ONLY (simplified, generator uses this exclusively) ✓
+- Encryption: AES-256-GCM ONLY (hardware accelerated, if used) ✓
 - Assembly: Out-of-order scanning handled ✓
 - Generator spec reviewed: generator/IMPLEMENTATION.md Section 3 ✓
 ```
@@ -939,7 +941,8 @@ These changes require IMMEDIATE compatibility review:
 🚩 Modifying `qr_receiver/js/data-processor.js` (compression/decompression)
 🚩 Modifying `qr_receiver/js/chunk-manager.js` (assembly logic)
 🚩 Changing binary QR parser byte extraction
-🚩 Adding/removing compression algorithm support
+🚩 Removing Zstd-22 decompression support (BREAKS SYSTEM)
+🚩 Removing AES-256-GCM decryption support (BREAKS ENCRYPTED TRANSFERS)
 🚩 Changing completion detection logic
 🚩 Modifying metadata field parsing
 
@@ -954,7 +957,7 @@ If you discover scanner CANNOT decode generator output:
 3. **Compare scanner parser** - find exact mismatch
 4. **Fix scanner to match generator** - generator is source of truth
 5. **Document the bug** - explain what was wrong and how fixed
-6. **Test rigorously** - verify all compression types, file sizes
+6. **Test rigorously** - verify Zstd-22 decompression, all file sizes, with/without encryption
 
 **Generator specification is ALWAYS correct. Scanner MUST adapt to generator.**
 

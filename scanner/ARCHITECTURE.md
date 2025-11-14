@@ -38,10 +38,10 @@ In an air-gapped system:
 - NO assumptions about QR scan order (stateless parsing)
 
 **2. Compression Abstraction Layer (Section 3.3)**
-- MUST support: Zstd level 22 (PRIMARY), Brotli level 11, LZ4
+- MUST support: Zstd level 22 ONLY (SIMPLIFIED for reliability)
 - Decompression services MUST match generator compression output
-- NO removal of algorithms (generator might use any)
-- Strategy pattern: pluggable algorithms for future-proofing
+- Generator ALWAYS uses Zstd-22 (maximum compression = minimum QR codes)
+- Single algorithm = simpler code path = more reliable for air-gap
 
 **3. Chunk Assembly State Machine (Section 3.4)**
 - MUST handle out-of-order chunk arrival (generator displays sequentially, user scans randomly)
@@ -104,10 +104,10 @@ describe('ProtocolV3Parser', () => {
 These changes indicate potential compatibility breakage:
 
 🚩 **Modifying protocol parsing byte offsets**
-🚩 **Changing compression algorithm detection**
-🚩 **Removing decompression algorithm support**
+🚩 **Changing compression algorithm (MUST be Zstd-22)**
+🚩 **Removing Zstd decompression support (BREAKS SYSTEM)**
 🚩 **Adding required fields to metadata**
-🚩 **Changing hash algorithm**
+🚩 **Changing hash algorithm (MUST be SHA-256)**
 🚩 **Modifying chunk assembly completion logic**
 🚩 **Adding validation that rejects valid generator output**
 
