@@ -28,11 +28,9 @@ Every module MUST adhere to these requirements:
 - ❌ NEVER change binary structure without updating generator
 
 #### 2. Compression Service (Section 2.3)
-- ✅ MUST support Zstd level 22 (generator DEFAULT)
-- ✅ MUST support Brotli level 11
-- ✅ MUST support LZ4
+- ✅ MUST support Zstd level 22 (ONLY compression algorithm)
 - ✅ MUST decompress exact same format generator compresses
-- ❌ NEVER remove compression algorithm support
+- ❌ NEVER remove Zstd decompression support (system will break!)
 
 #### 3. Chunk Assembly (Section 2.1.1)
 - ✅ MUST handle 2272-byte chunks (generator default)
@@ -65,14 +63,13 @@ Every module MUST adhere to these requirements:
 **AFTER any code changes:**
 
 ```bash
-# 1. Generate test file with ALL compression types
+# 1. Generate test file (SIMPLIFIED - only Zstd-22)
 cd ../generator/
-python qr_generator.py --compression=zstd test.pdf
-python qr_generator.py --compression=brotli test.pdf
-python qr_generator.py --compression=lz4 test.pdf
+python qr_generator.py test.pdf
+python qr_generator.py --encrypt test-encrypted.pdf
 
-# 2. Scan each with scanner
-# Verify successful reconstruction for ALL
+# 2. Scan with scanner
+# Verify successful reconstruction
 
 # 3. Verify hash matches
 sha256sum test.pdf
@@ -83,6 +80,10 @@ sha256sum downloaded-test.pdf
 dd if=/dev/urandom of=large.bin bs=1M count=10
 python qr_generator.py large.bin
 # Scan and verify reconstruction
+
+# 5. Test encrypted files
+python qr_generator.py --encrypt secure.pdf
+# Scan, enter password, verify reconstruction
 ```
 
 ### What Breaks Compatibility (DO NOT DO)
@@ -132,14 +133,14 @@ Before deployment:
 
 - [ ] Protocol V3 JSON parser tested with generator header QR
 - [ ] Binary parser byte offsets match generator encoder
-- [ ] Zstd decompression works with level 22 (generator default)
-- [ ] Brotli decompression works with level 11
-- [ ] LZ4 decompression works
+- [ ] Zstd-22 decompression works (ONLY compression algorithm - CRITICAL!)
+- [ ] AES-256-GCM decryption works (ONLY encryption algorithm if used)
+- [ ] fzstd library loaded and functional
 - [ ] Chunk assembly handles out-of-order scanning
 - [ ] Completion detection works: received == total AND no gaps
-- [ ] Metadata extraction works (filename, size, compression, etc.)
+- [ ] Metadata extraction works (filename, size, compression=zstd, encryption=aes256gcm)
 - [ ] SHA-256 hash validation passes
-- [ ] End-to-end test: generate → scan → verify byte-match
+- [ ] End-to-end test: generate → scan → verify byte-match (MUST be identical!)
 
 **IF ANY ITEM FAILS → FIX IMMEDIATELY. DO NOT DEPLOY.**
 
@@ -418,16 +419,15 @@ export class ProtocolV3Parser {
             }
         }
 
-        // Validate compression
-        const validCompression = ['brotli', 'zstd', 'lz4', 'none'];
-        if (!validCompression.includes(data.meta.compression)) {
-            throw new Error(`Invalid compression: ${data.meta.compression}`);
+        // Validate compression (SIMPLIFIED - only zstd supported)
+        if (data.meta.compression !== 'zstd') {
+            throw new Error(`Invalid compression: ${data.meta.compression}. ONLY 'zstd' supported (level 22).`);
         }
 
-        // Validate encryption
+        // Validate encryption (SIMPLIFIED - only aes256gcm or none)
         const validEncryption = ['aes256gcm', 'none'];
         if (!validEncryption.includes(data.meta.encryption)) {
-            throw new Error(`Invalid encryption: ${data.meta.encryption}`);
+            throw new Error(`Invalid encryption: ${data.meta.encryption}. ONLY 'aes256gcm' or 'none' supported.`);
         }
     }
 
@@ -523,14 +523,15 @@ export class ProtocolV3Parser {
 }
 ```
 
-**COMPATIBILITY WITH GENERATOR:**
+**COMPATIBILITY WITH GENERATOR (SIMPLIFIED FOR RELIABILITY):**
 - ✅ Header QR (idx=0): JSON with metadata
 - ✅ Data QRs (idx>=1): Binary format [sid:16][idx:4][total:4][data][hash:32]
-- ✅ Same compression algorithms (brotli, zstd-22, lz4, none)
-- ✅ Same encryption (aes256gcm, none)
-- ✅ Same hash algorithm (SHA-256)
-- ✅ Optimized chunk size (2272 bytes for QR-40M with total field)
+- ✅ Compression: Zstd level 22 ONLY (best compression ratio)
+- ✅ Encryption: AES-256-GCM ONLY (hardware accelerated, authenticated)
+- ✅ Hash algorithm: SHA-256
+- ✅ Optimized chunk size: 2272 bytes for QR-40M with total field
 - ✅ **50-70% fewer QR codes** vs naive implementation
+- ✅ **Simpler system** = more reliable in air-gap military deployments
 
 ---
 
@@ -1357,17 +1358,17 @@ export class FileReconstructor {
     /**
      * Decompress data
      *
-     * IMPORTANT: MUST support all generator compression algorithms:
-     * - zstd (DEFAULT for generator) - CRITICAL!
-     * - brotli
-     * - lz4
-     * - none
+     * SIMPLIFIED: Generator ONLY uses Zstd level 22
+     * - zstd (ONLY compression algorithm) - CRITICAL!
+     *
+     * Scanner validates compression=zstd in parser (see parseHeaderQR validation)
      */
     async decompress(data, metadata) {
         const algorithm = metadata.compression;
 
-        if (algorithm === 'none') {
-            return data;
+        // Generator only uses 'zstd' - validation already done in parser
+        if (algorithm !== 'zstd') {
+            throw new Error(`Unsupported compression: ${algorithm}. Generator only uses 'zstd'.`);
         }
 
         const decompressed = await this.compressionService.decompress(

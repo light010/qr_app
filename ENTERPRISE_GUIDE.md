@@ -51,9 +51,8 @@ In an air-gapped deployment:
 ```bash
 # 1. Generate test QR codes on generator device
 cd generator/
-python qr_generator.py --compression=zstd test-file.pdf
-python qr_generator.py --compression=brotli test-document.docx
-python qr_generator.py --compression=lz4 test-image.jpg
+python qr_generator.py test-file.pdf
+python qr_generator.py --encrypt test-document.docx
 
 # 2. Transfer scanner to separate device (USB/CD)
 # Simulate air-gap: NO network connection between devices
@@ -67,9 +66,10 @@ sha256sum test-file.pdf
 sha256sum downloaded-test-file.pdf
 # MUST MATCH EXACTLY!
 
-# 5. Repeat for all compression types and file types
+# 5. Repeat for different file types
 # Test matrix:
-# - Compression: zstd, brotli, lz4, none
+# - Compression: zstd level 22 (ONLY algorithm supported)
+# - Encryption: none, aes256gcm
 # - File types: .txt, .pdf, .docx, .jpg, .png, .zip, .mp4
 # - File sizes: 1KB, 100KB, 1MB, 10MB, 50MB
 # ALL must reconstruct perfectly!
@@ -82,15 +82,15 @@ sha256sum downloaded-test-file.pdf
 Before deploying to production:
 
 - [ ] **Protocol V3 compatibility verified** - Binary format matches exactly
-- [ ] **Zstd decompression works** - Generator default compression succeeds
-- [ ] **Brotli decompression works** - Alternative compression succeeds
-- [ ] **LZ4 decompression works** - Fast compression succeeds
+- [ ] **Zstd-22 decompression works** - ONLY compression algorithm, must succeed
+- [ ] **AES-256-GCM encryption works** - ONLY encryption algorithm (if used)
 - [ ] **Large file tested** - 10MB+ file reconstructs correctly
 - [ ] **Multi-platform tested** - Generator (Python) + Scanner (iOS, Android, Desktop)
 - [ ] **Out-of-order scanning tested** - Scan QRs in random order, still reconstructs
 - [ ] **Hash validation passes** - SHA-256 checksum matches original
-- [ ] **Metadata extraction works** - Filename, size, compression type correct
+- [ ] **Metadata extraction works** - Filename, size, compression=zstd, encryption=aes256gcm
 - [ ] **Air-gap verified** - ZERO network communication during transfer
+- [ ] **fzstd library bundled** - Zstd decompression library present in scanner
 
 **IF ANY CHECKLIST ITEM FAILS → HALT DEPLOYMENT.**
 
@@ -101,8 +101,8 @@ These changes WILL break generator/scanner compatibility:
 ❌ **Generator changes binary encoding WITHOUT updating scanner**
 - Example: Generator adds field at byte offset 20, scanner still expects data at 20
 
-❌ **Scanner removes compression algorithm support**
-- Example: Scanner removes Zstd, but generator defaults to Zstd
+❌ **Scanner removes Zstd decompression support**
+- Example: Scanner breaks Zstd library, but generator ONLY uses Zstd-22
 
 ❌ **Generator changes chunk size WITHOUT updating scanner**
 - Example: Generator uses 3000-byte chunks, scanner expects max 2272
@@ -231,9 +231,10 @@ These changes WILL break generator/scanner compatibility:
 **OPTIMIZATION STRATEGY:**
 - ✅ **Metadata once** (first QR only) - NOT repeated
 - ✅ **Binary data chunks** (base64 only for first QR) - saves 33% space
-- ✅ **Maximum compression** (Zstd level 22, Brotli level 11)
-- ✅ **Optimal chunk size** (2953 bytes for QR-M, 1852 bytes for QR-H)
+- ✅ **Maximum compression** (Zstd level 22 ONLY - best compression ratio)
+- ✅ **Optimal chunk size** (2272 bytes for QR-40M with binary format)
 - ✅ **Error correction balance** (Medium for best capacity/reliability)
+- ✅ **Single algorithm** (Zstd-22 only - simplicity for air-gap reliability)
 
 **Result**: 50-70% fewer QR codes compared to naive implementation.
 
@@ -320,34 +321,39 @@ JSON with complete metadata:
 |-------|------|----------|--------------|
 | `filename` | string | ✅ | Original filename |
 | `size` | number | ✅ | Total file size in bytes |
-| `compression` | string | ✅ | `brotli`, `zstd`, `lz4`, `none` |
-| `compression_level` | number | ✅ | Compression level used |
-| `encryption` | string | ✅ | `aes256gcm`, `none` |
+| `compression` | string | ✅ | `zstd` (ONLY - level 22 always) |
+| `compression_level` | number | ✅ | Always 22 (maximum compression) |
+| `encryption` | string | ✅ | `aes256gcm` or `none` (ONLY options) |
 | `checksum` | string | ✅ | SHA-256 hash of complete file |
 | `timestamp` | string | ✅ | ISO 8601 UTC timestamp |
 | `mime_type` | string | ✅ | MIME type of file |
 | `chunk_size` | number | ✅ | Bytes per chunk (optimized) |
 | `qr_version` | string | ✅ | QR version used (e.g., "40-M") |
 
-### Supported Algorithms (OPTIMIZED)
+### Supported Algorithms (SIMPLIFIED FOR RELIABILITY)
 
-**Compression (Maximum Levels for Minimum QR Codes):**
-- `zstd`: **Zstandard level 22** (BEST: 30-40% better than level 3) ⭐ RECOMMENDED
-- `brotli`: **Brotli level 11, window 24** (Very good, slower)
-- `lz4`: LZ4 (Fast but poor compression, NOT recommended)
-- `none`: No compression (only for already compressed files)
+**Compression (SINGLE ALGORITHM - BEST FOR MINIMAL QR CODES):**
+- `zstd`: **Zstandard level 22** (ONLY compression algorithm supported)
+  - Compression ratio: 25-35% (BEST available)
+  - Speed: Medium (hardware acceleration available on modern CPUs)
+  - Result: Minimum number of QR codes
+  - **Why ONLY Zstd-22?**
+    - ✅ Best compression ratio = fewest QR codes
+    - ✅ Simpler system = more reliable for air-gap
+    - ✅ Single code path = easier to verify compatibility
+    - ✅ Fewer failure points in military deployment
 
-**Compression Comparison:**
-| Algorithm | Ratio | Speed | Recommendation |
-|-----------|-------|-------|----------------|
-| Zstd-22 | 25-35% | Medium | ✅ DEFAULT (best balance) |
-| Brotli-11 | 20-30% | Slow | Use for text-heavy files |
-| LZ4 | 50-60% | Fast | ❌ Avoid (wastes QR codes) |
-| None | 100% | N/A | Only for .zip, .jpg, .mp4 |
-
-**Encryption:**
-- `aes256gcm`: AES-256-GCM with PBKDF2 (100,000 iterations)
-- `none`: No encryption
+**Encryption (SINGLE ALGORITHM - BEST FOR FAST TRANSFER):**
+- `aes256gcm`: **AES-256-GCM with PBKDF2** (ONLY encryption algorithm supported)
+  - Hardware accelerated (AES-NI on modern CPUs)
+  - Authenticated encryption (integrity + confidentiality)
+  - 100,000 PBKDF2 iterations for key derivation
+  - **Why ONLY AES-256-GCM?**
+    - ✅ Hardware acceleration = fastest encryption/decryption
+    - ✅ Authenticated = detects tampering automatically
+    - ✅ Widely supported = works on all modern devices
+    - ✅ Battle-tested = military-grade, NIST approved
+- `none`: No encryption (optional - for non-sensitive files)
 
 **Hash:**
 - SHA-256 for all checksums and hashes

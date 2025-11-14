@@ -92,9 +92,7 @@ generator/
 │   │   └── compression/
 │   │       ├── __init__.py
 │   │       ├── base_compression.py
-│   │       ├── brotli_compression.py
-│   │       ├── zstd_compression.py
-│   │       └── lz4_compression.py
+│   │       └── zstd_compression.py  # ONLY compression algorithm (Zstd-22)
 │   │
 │   └── utils/                      # Utility functions
 │       ├── __init__.py
@@ -289,14 +287,22 @@ class QRCodeModel:
 
 ### 2.2 Services Implementation
 
-#### 2.2.1 Compression Service
+#### 2.2.1 Compression Service (SIMPLIFIED - ZSTD ONLY)
 ```python
 # src/core/services/compression_service.py
-from abc import ABC, abstractmethod
+"""
+Compression service - SIMPLIFIED TO SINGLE ALGORITHM
+
+WHY ONLY ZSTD-22?
+- Best compression ratio = minimum number of QR codes
+- Simpler system = more reliable for air-gap deployment
+- Single code path = easier to verify generator/scanner compatibility
+- Fewer dependencies = reduced failure points
+
+REMOVED: Brotli, LZ4 (inferior compression ratios)
+"""
 from typing import Protocol
-import brotli
 import zstandard as zstd
-import lz4.frame
 
 class CompressionAlgorithm(Protocol):
     """Protocol for compression algorithms"""
@@ -306,28 +312,19 @@ class CompressionAlgorithm(Protocol):
     @property
     def name(self) -> str: ...
 
-class BrotliCompression:
-    """Brotli compression implementation"""
-
-    def __init__(self, level: int = 11):
-        self.level = level
-
-    def compress(self, data: bytes) -> bytes:
-        return brotli.compress(data, quality=self.level)
-
-    def decompress(self, data: bytes) -> bytes:
-        return brotli.decompress(data)
-
-    @property
-    def name(self) -> str:
-        return "brotli"
-
 class ZstdCompression:
-    """Zstandard compression implementation - OPTIMIZED for minimal QR codes"""
+    """
+    Zstandard compression - ONLY compression algorithm supported
+
+    Level 22 (maximum) provides:
+    - 25-35% compression ratio (BEST available)
+    - Minimum number of QR codes
+    - Hardware acceleration on modern CPUs
+    """
 
     def __init__(self, level: int = 22):
-        """Initialize with level 22 (maximum compression) for optimal QR count reduction"""
-        self.level = level
+        """Initialize with level 22 (maximum compression) - ALWAYS"""
+        self.level = 22  # Fixed at maximum compression
 
     def compress(self, data: bytes) -> bytes:
         compressor = zstd.ZstdCompressor(level=self.level)
@@ -341,54 +338,29 @@ class ZstdCompression:
     def name(self) -> str:
         return "zstd"
 
-class LZ4Compression:
-    """LZ4 compression implementation"""
+class CompressionService:
+    """Service for data compression - SINGLE ALGORITHM ONLY"""
+
+    def __init__(self):
+        # SIMPLIFIED: Only Zstd-22 supported
+        self.algorithm = ZstdCompression()
 
     def compress(self, data: bytes) -> bytes:
-        return lz4.frame.compress(data)
+        """Compress data using Zstd level 22 (ONLY algorithm)"""
+        return self.algorithm.compress(data)
 
     def decompress(self, data: bytes) -> bytes:
-        return lz4.frame.decompress(data)
+        """Decompress data using Zstd"""
+        return self.algorithm.decompress(data)
 
     @property
     def name(self) -> str:
-        return "lz4"
+        """Get algorithm name (always 'zstd')"""
+        return self.algorithm.name
 
-class CompressionService:
-    """Service for data compression"""
-
-    def __init__(self):
-        self.algorithms = {
-            'brotli': BrotliCompression,
-            'zstd': ZstdCompression,
-            'lz4': LZ4Compression
-        }
-
-    def get_algorithm(self, name: str) -> CompressionAlgorithm:
-        """Get compression algorithm by name"""
-        if name not in self.algorithms:
-            raise ValueError(f"Unknown compression algorithm: {name}")
-        return self.algorithms[name]()
-
-    def select_best_algorithm(self, data: bytes) -> str:
-        """Automatically select best compression algorithm"""
-        # Test each algorithm and select best ratio
-        best_ratio = float('inf')
-        best_algorithm = 'zstd'
-
-        for name, AlgorithmClass in self.algorithms.items():
-            try:
-                algorithm = AlgorithmClass()
-                compressed = algorithm.compress(data[:1000])  # Test with sample
-                ratio = len(compressed) / len(data[:1000])
-
-                if ratio < best_ratio:
-                    best_ratio = ratio
-                    best_algorithm = name
-            except Exception:
-                continue
-
-        return best_algorithm
+    def get_algorithm(self) -> CompressionAlgorithm:
+        """Get compression algorithm (always Zstd-22)"""
+        return self.algorithm
 ```
 
 #### 2.2.2 Encryption Service
@@ -666,10 +638,11 @@ class ProtocolV3:
     - Session management with UUIDs
     - Rich metadata
     - Error correction support (Reed-Solomon)
-    - Encryption (AES-256-GCM)
-    - Compression (brotli, zstd, lz4)
+    - Encryption (AES-256-GCM ONLY - hardware accelerated)
+    - Compression (Zstd level 22 ONLY - best compression ratio)
     - SHA-256 checksums
     - Timestamp tracking
+    - SIMPLIFIED: Single compression & encryption algorithms for reliability
 
     COMPATIBILITY: Scanner MUST implement exact same protocol
     """
@@ -815,8 +788,8 @@ class ProtocolV3:
 - `meta`: Metadata object (REQUIRED)
   - `filename`: Original filename (REQUIRED)
   - `size`: Total file size in bytes (REQUIRED)
-  - `compression`: "brotli", "zstd", "lz4", or "none" (REQUIRED)
-  - `encryption`: "aes256gcm" or "none" (REQUIRED)
+  - `compression`: "zstd" ONLY - always level 22 (REQUIRED)
+  - `encryption`: "aes256gcm" or "none" ONLY (REQUIRED)
   - `checksum`: SHA-256 hash of complete file (REQUIRED)
   - `timestamp`: ISO 8601 UTC timestamp (REQUIRED)
   - `mime_type`: MIME type of file (REQUIRED)
@@ -824,20 +797,19 @@ class ProtocolV3:
   - `type`: "reed-solomon" (REQUIRED if ec present)
   - `data`: Base64-encoded EC data (REQUIRED if ec present)
 
-**Supported Compression Algorithms (OPTIMIZED for Minimal QR Codes):**
-- `zstd`: **Zstandard level 22** (DEFAULT - best compression) ⭐ RECOMMENDED
-- `brotli`: Brotli level 11, window 24 (very good, slower)
-- `lz4`: LZ4 (fast but poor compression - NOT recommended)
-- `none`: No compression (only for .zip, .jpg, .mp4)
+**Compression Algorithm (SIMPLIFIED - SINGLE ALGORITHM ONLY):**
+- `zstd`: **Zstandard level 22** (ONLY algorithm supported)
+  - 25-35% compression ratio (BEST available)
+  - Minimum number of QR codes
+  - Hardware acceleration on modern CPUs
+  - **Why ONLY Zstd-22?** Simpler = more reliable for air-gap deployment
 
-**Compression Comparison:**
-- Zstd-22: 25-35% of original (BEST for text/code)
-- Brotli-11: 20-30% of original (good for text)
-- LZ4: 50-60% of original (wastes QR codes)
-
-**Supported Encryption:**
-- `aes256gcm`: AES-256-GCM with PBKDF2 (100,000 iterations)
-- `none`: No encryption
+**Encryption Algorithm (SIMPLIFIED - SINGLE ALGORITHM ONLY):**
+- `aes256gcm`: **AES-256-GCM** with PBKDF2 (100,000 iterations) (ONLY algorithm)
+  - Hardware accelerated (AES-NI)
+  - Authenticated encryption
+  - Fastest transfer speed
+- `none`: No encryption (optional)
 
 **QR Code Optimization:**
 - Chunk size: **2272 bytes** (optimized for QR-40M binary mode with total field)
@@ -871,19 +843,18 @@ def cli():
 
 @cli.command()
 @click.argument('file_path', type=click.Path(exists=True))
-@click.option('--compression', '-c', type=click.Choice(['brotli', 'zstd', 'lz4', 'none']), default='zstd', help='Compression algorithm (default: zstd-22)')
-@click.option('--compression-level', type=int, default=22, help='Compression level (zstd: 1-22, brotli: 0-11)')
+# COMPRESSION: Always Zstd level 22 (no user option - simplified for reliability)
 @click.option('--encrypt', '-e', is_flag=True, help='Enable encryption')
 @click.option('--password', '-p', type=str, help='Encryption password')
 @click.option('--chunk-size', type=int, default=2272, help='Chunk size in bytes (default: 2272 optimized for QR-40M)')
 @click.option('--fps', type=float, default=2.0, help='Display frames per second')
 @click.option('--output', '-o', type=click.Path(), help='Save QR codes to directory')
-def generate(file_path, compression, compression_level, encrypt, password, chunk_size, fps, output):
+def generate(file_path, encrypt, password, chunk_size, fps, output):
     """Generate QR codes from FILE_PATH (OPTIMIZED for minimal QR count)"""
 
-    console.print(f"[bold blue]QR Generator v3.0 (Optimized)[/bold blue]")
+    console.print(f"[bold blue]QR Generator v3.0 (Simplified & Optimized)[/bold blue]")
     console.print(f"File: {file_path}")
-    console.print(f"Compression: {compression}-{compression_level}")
+    console.print(f"Compression: zstd-22 (ALWAYS - maximum compression)")
     console.print(f"Chunk size: {chunk_size} bytes (QR-40M optimized)")
 
     # Validate encryption
@@ -915,7 +886,8 @@ def generate(file_path, compression, compression_level, encrypt, password, chunk
     table.add_column("Value", style="green")
 
     table.add_row("Total Chunks", str(total_chunks))
-    table.add_row("Compression", compression)
+    table.add_row("Compression", "zstd-22 (ONLY)")
+    table.add_row("Encryption", "aes256gcm" if encrypt else "none")
     table.add_row("Protocol", "V3 (latest)")
     table.add_row("Estimated Time", f"{estimated_time:.1f}s")
 
@@ -971,11 +943,12 @@ def test_zstd_compression(compression_service, sample_data):
     # Verify data integrity
     assert decompressed == sample_data
 
-def test_select_best_algorithm(compression_service, sample_data):
-    """Test automatic algorithm selection"""
-    best = compression_service.select_best_algorithm(sample_data)
+def test_always_zstd(compression_service):
+    """Test that only Zstd-22 is used (SIMPLIFIED)"""
+    algorithm = compression_service.get_algorithm()
 
-    assert best in ['brotli', 'zstd', 'lz4']
+    assert algorithm.name == 'zstd'
+    assert algorithm.level == 22  # Always maximum compression
 ```
 
 ---
